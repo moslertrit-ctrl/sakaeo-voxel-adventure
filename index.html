@@ -196,7 +196,7 @@
       linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px);
     background-size:28px 28px;
     transform:perspective(420px) rotateX(58deg) scale(1.4);transform-origin:50% 100%}
-  .start-card{border-radius:24px;position:relative;z-index:2}
+  .start-card{border-radius:24px;position:relative;z-index:2;max-height:min(94vh,700px);overflow-y:auto}
   .start-crest{border-radius:18px;padding:10px 12px 6px;margin-bottom:8px}
   .field-3d{
     background:linear-gradient(180deg,#fff 0%,#E3F0FB 100%);
@@ -214,6 +214,35 @@
     .hud-chip b,.hud-chip .hud-val{font-size:12px}
     #hudZoneName{max-width:34vw}
     #minimap{width:104px !important;height:104px !important}
+  }
+  /* จอเตี้ย (มือถือ/แท็บเล็ตหมุนนอน หรือจอเกือบสี่เหลี่ยม) — บีบ HUD กันปุ่มมุมขวาล้นออกนอกจอ
+     ใช้แค่ max-height ล้วน (ไม่บังคับ orientation:landscape) เพราะ Codex review เจอช่องโหว่จริง:
+     ความสูง 501-587px (เช่น 720×540) ยังทับกันแม้ >500px และจอเกือบสี่เหลี่ยม (เช่น 480×480)
+     ไม่เข้าเงื่อนไข landscape เลยไม่ถูกบีบ ทั้งที่เตี้ยพอจะทับปุ่มฟันเหมือนกัน */
+  @media (max-height:600px){
+    #hudLeft{width:6rem}
+    .hud-chip{font-size:9px;padding:2px 6px}
+    .hud-chip b,.hud-chip .hud-val{font-size:11px}
+    #hudTop{top:.25rem}
+    #hudZoneName{max-width:28vw;font-size:.8rem}
+    #bossBar{top:3.25rem}
+    #hudRight{top:.25rem;gap:.25rem}
+    #hudRight button{width:2rem;height:2rem;font-size:.9rem}
+    #minimapWrap{padding:2px}
+    #minimap{width:48px !important;height:48px !important}
+    #compassTag{display:none}
+    #attackBtn{width:3.25rem;height:3.25rem;bottom:3.25rem;font-size:1.5rem}
+    #weaponTag{bottom:.25rem}
+    #camHint{display:none}
+  }
+  /* จอเตี้ยมากผิดปกติ (ต่ำกว่า ~320px — ไม่มีอุปกรณ์จริงรุ่นไหนเตี้ยขนาดนี้ แต่ Codex review ทดสอบเจอว่ายังทับ
+     กันอยู่ที่ระดับนี้ จึงกันไว้ให้ครบ) — ซ่อนมินิแมพ+บีบปุ่มเพิ่มอีกชั้น กันปุ่มมุมขวาทับปุ่มฟัน */
+  @media (max-height:320px){
+    #minimapWrap{display:none}
+    #hudRight{gap:.2rem}
+    #hudRight button{width:1.75rem;height:1.75rem;font-size:.75rem}
+    #attackBtn{width:2.5rem;height:2.5rem;bottom:2rem;font-size:1.15rem}
+    #weaponTag{bottom:.15rem}
   }
 </style>
 </head>
@@ -259,7 +288,7 @@
   </div>
 
   <!-- ขวาบน: มินิแมพ + กลับหน้าหลัก -->
-  <div class="fixed top-2 right-2 sm:top-3 sm:right-3 flex flex-col items-end gap-1.5 pointer-events-auto">
+  <div id="hudRight" class="fixed top-2 right-2 sm:top-3 sm:right-3 flex flex-col items-end gap-1.5 pointer-events-auto">
     <div id="minimapWrap" class="hidden panel-3d rounded-xl p-1">
       <canvas id="minimap" width="132" height="132" class="rounded-lg block w-[132px] h-[132px]"></canvas>
       <div id="compassTag" class="mitr text-center text-[11px] font-bold text-[#1A3A5C] mt-1 leading-tight">🧭 หันไปทิศใต้ ⬇️</div>
@@ -267,6 +296,10 @@
     <button id="homeBtn" class="btn-3d-icon rounded-xl w-[52px] h-[52px] sm:w-14 sm:h-14 flex items-center justify-center text-2xl" title="กลับหน้าหลัก">🏠</button>
     <button id="muteBtn" class="btn-3d-icon rounded-xl w-[52px] h-[52px] sm:w-14 sm:h-14 flex items-center justify-center text-2xl" title="เปิด/ปิดเสียงเอฟเฟกต์">🔊</button>
     <button id="bgmBtn" class="btn-3d-icon rounded-xl w-[52px] h-[52px] sm:w-14 sm:h-14 flex items-center justify-center text-2xl" title="เปิด/ปิดเพลงคลอ">🎵</button>
+    <div class="flex gap-1.5">
+      <button id="zoomOutBtn" class="btn-3d-icon rounded-xl w-[52px] h-[52px] sm:w-14 sm:h-14 flex items-center justify-center text-2xl" title="ซูมออก (เห็นกว้างขึ้น)">➖</button>
+      <button id="zoomInBtn" class="btn-3d-icon rounded-xl w-[52px] h-[52px] sm:w-14 sm:h-14 flex items-center justify-center text-2xl" title="ซูมเข้า (ใกล้ตัวละคร)">➕</button>
+    </div>
   </div>
 </div>
 
@@ -366,6 +399,7 @@
       <button id="howToBtn" class="btn-3d-secondary mitr py-2.5 rounded-xl text-sm font-bold">📖 วิธีเล่น</button>
     </div>
     <button id="rankBtn" class="btn-3d-accent mitr w-full mt-2 py-2.5 rounded-xl text-sm font-bold">🏆 อันดับคะแนน</button>
+    <p class="text-[#1A3A5C]/40 text-[10px] mt-3 leading-snug">© 2569 นายเลิศฤทธิ์ สมศรีเสาร์ · โรงเรียนเทศบาลมิตรสัมพันธ์วิทยา — สงวนลิขสิทธิ์</p>
   </div>
 </div>
 
@@ -602,6 +636,8 @@
 /* ============================================================
    Sa Kaeo Voxel Adventure — ไฟล์สื่อนวัตกรรมประกวด (Three.js)
    Three.js (voxel) + Tailwind + Web Audio API
+   © 2569 นายเลิศฤทธิ์ สมศรีเสาร์ · โรงเรียนเทศบาลมิตรสัมพันธ์วิทยา
+   สงวนลิขสิทธิ์ — ดูเงื่อนไขการใช้งานที่ไฟล์ LICENSE
    ============================================================ */
 
 /* ============================================================
@@ -1061,6 +1097,7 @@ let camYaw = 0;                 // มุมหมุนรอบผู้เล
 let camDist = 14;               // ระยะถอยจากผู้เล่น
 let camHeight = 9;              // ความสูงกล้องเหนือหัว
 const CAM_DIST_MIN = 8, CAM_DIST_MAX = 24;
+const CAM_OCCL_MIN_DIST = 3;    // เว้นระยะรอบผู้เล่นก่อนนับเป็น "สิ่งบัง" (เดินทะลุฉาก/หินได้เพราะไม่มี collision — ถ้าไม่เว้นระยะ จะซูมกล้องเข้าเองทุกครั้งที่เดินเข้าใกล้)
 const CAM_ROT_SPEED = 1.1;      // หมุนกล้องช้าลง กันเวียนหัว
 const CAM_DRAG_SENS = 0.0055;   // ความไวหมุนเมื่อลากเมาส์ (ลดลง กันเวียนหัว)
 const CAM_HEIGHT_SENS = 0.028;  // ลากขึ้น-ลงปรับความสูงกล้อง (ลดลง)
@@ -1428,6 +1465,9 @@ let moveTarget = null;          // {x,z} จุดหมายที่คลิ
 let attackTarget = null;        // มอนสเตอร์/บอสที่คลิกล็อกเป้าไว้ → เดินเข้าไปฟันเอง
 const raycaster = new THREE.Raycaster();
 const ndc = new THREE.Vector2();
+// กล้องกันมุด (occlusion): ยิงรังสีจากหัวผู้เล่น→จุดกล้อง ถ้ามีวัตถุทึบขวางให้ดึงกล้องมาอยู่หน้าวัตถุ
+const camRay = new THREE.Raycaster();
+const camLookV = new THREE.Vector3(), camWantV = new THREE.Vector3(), camDirV = new THREE.Vector3();
 
 /* หา "ตัวมอนสเตอร์ระดับบนสุด" จาก mesh ลูกที่ raycast ไปโดน */
 function enemyFromHit(obj){
@@ -2498,7 +2538,7 @@ function spawnHeart(){
   scene.add(h); hearts.push(h);
 }
 
-/* กล่องสมบัติ (เปิดแล้วมีคำถาม) กระจายทั่วแมป */
+/* กล่องสมบัติ (เปิดแล้วมีคำถาม) กระจายทั่วแมป — เว้นระยะห่างจากกล่องอื่นที่วางอยู่แล้ว กันกระจุกจุดเดียวกัน */
 function spawnQBox(){
   const s = scatterSpot(8, qboxes.map(q=>q.position), 16);
   const q = buildTreasureChest();
@@ -3386,9 +3426,33 @@ function updateCamera(dt){
   const tx = px - Math.sin(camYaw) * camDist;
   const tz = pz - Math.cos(camYaw) * camDist;
   const ty = lookY + camHeight;
+  // ตามผู้เล่นแบบสมูท (ease) เข้าหาจุดกล้องปกติก่อน (ยังไม่คิดสิ่งบัง)
   camera.position.x += (tx - camera.position.x) * Math.min(1, dt*4);
   camera.position.z += (tz - camera.position.z) * Math.min(1, dt*4);
   camera.position.y += (ty - camera.position.y) * Math.min(1, dt*4);
+  // กันกล้องมุด/ถูกบังด้วยต้นไม้-หิน-ภูเขา: ยิงรังสีจากหัวผู้เล่น→กล้อง(หลัง ease)
+  // โดนวัตถุทึบ → ดึงกล้องมาไว้หน้าวัตถุ "ทันที" (snap in) · พอสิ่งบังหลุด กล้อง ease ออกเองจาก follow
+  if(envGroup){
+    camLookV.set(px, lookY, pz);
+    camDirV.set(camera.position.x - px, camera.position.y - lookY, camera.position.z - pz);
+    const curDist = camDirV.length();
+    if(curDist > 0.01){
+      camDirV.multiplyScalar(1 / curDist);
+      camRay.set(camLookV, camDirV);
+      camRay.far = curDist;
+      camRay.camera = camera;   // จำเป็นเวลา raycast โดนป้าย (Sprite) ไม่งั้น error
+      const hits = camRay.intersectObjects(envGroup.children, true);   // เรียงใกล้→ไกล
+      for(const h of hits){
+        const m = h.object;
+        if(!m.material || m.material.transparent || m.material.opacity < 1 || m.type === 'Sprite') continue;
+        if(h.distance < CAM_OCCL_MIN_DIST) continue;   // ใกล้ผู้เล่นเกินไป = ยืน/เดินทะลุของอยู่ ไม่ใช่สิ่งบังจริง ข้ามไป
+        // ตั้งหน้าวัตถุ: เว้น ~0.6 เมื่อทำได้ แต่ไม่เกิน hit−0.1 (การันตีไม่เลยเข้าในวัตถุ แม้ hit ใกล้กว่า min)
+        const allow = Math.min(h.distance - 0.1, Math.max(1.0, h.distance - 0.6));
+        camera.position.set(px + camDirV.x * allow, lookY + camDirV.y * allow, pz + camDirV.z * allow);
+        break;
+      }
+    }
+  }
   camera.lookAt(px, lookY, pz);
 }
 
@@ -3604,6 +3668,11 @@ function bindInput(){
     setBgmMuted(!bgmMuted);
     toast(bgmMuted ? '🔕 ปิดเพลงคลอแล้ว' : '🎵 เปิดเพลงคลอแล้ว', 900);
   };
+  // ปุ่มซูมบนจอ (กดได้ทั้งเมาส์/จอสัมผัส) — ปรับ camDist ในช่วงเดียวกับล้อเมาส์/หนีบ 2 นิ้ว
+  const ZOOM_STEP = 3.2;
+  const zin = document.getElementById('zoomInBtn'), zout = document.getElementById('zoomOutBtn');
+  if(zin)  zin.onclick  = ()=>{ camDist = Math.max(CAM_DIST_MIN, camDist - ZOOM_STEP); };
+  if(zout) zout.onclick = ()=>{ camDist = Math.min(CAM_DIST_MAX, camDist + ZOOM_STEP); };
   BGM.start();                                                         // ลูปเพลงคลอ (เงียบเองเมื่อไม่ได้อยู่ในด่าน)
   // จอชนะ (ผ่านครบ 3 ด่าน)
   document.getElementById('winSummaryBtn').onclick = ()=>{
@@ -3639,10 +3708,14 @@ function bindInput(){
   };
   document.getElementById('summaryHomeBtn').onclick = goToHome;
 
-  addEventListener('resize', ()=>{
+  function fitToViewport(){
     camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
-  });
+  }
+  addEventListener('resize', fitToViewport);
+  // orientationchange: บางเบราว์เซอร์ (โดยเฉพาะ Android เก่า) ยังไม่รายงานขนาดจอใหม่ทันทีตอนอีเวนต์ยิง
+  // จึงเรียกซ้ำอีกครั้งหลังหน่วง ให้ทันตอน layout หมุนเสร็จจริง
+  addEventListener('orientationchange', ()=>{ fitToViewport(); setTimeout(fitToViewport, 300); });
 }
 
 /* ---------- boot ---------- */
