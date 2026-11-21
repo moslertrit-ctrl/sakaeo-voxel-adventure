@@ -1,0 +1,3758 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Sa Kaeo Voxel Adventure — English Vocabulary Game</title>
+<!-- ออฟไลน์บิลด์ (สำรองหน้าบูธ): โหลด vendor แทน CDN + ตัด Google Fonts ใช้ฟอนต์ระบบ · ตัวประกวดหลักคือ index-3d.html -->
+<script src="vendor/tailwind.js"></script>
+<script src="vendor/three.min.js"></script>
+<style>
+  /* offline: ตัด @import Google Fonts (Mitr/Sarabun) → fallback ฟอนต์ระบบ */
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#EAF6FF;font-family:'Sarabun',sans-serif;-webkit-user-select:none;user-select:none;touch-action:none}
+  #scene{position:fixed;inset:0}
+  canvas{display:block}
+  .mitr{font-family:'Mitr',sans-serif}
+  /* ป้ายชื่อลอยตามตัวละคร */
+  #nameTag{position:fixed;transform:translate(-50%,-100%);pointer-events:none;
+    background:rgba(255,255,255,.95);color:#1A3A5C;padding:2px 12px;border-radius:999px;
+    font-family:'Mitr',sans-serif;font-size:13px;white-space:nowrap;
+    box-shadow:0 3px 10px rgba(0,0,0,.18);border:1.5px solid #FF8A2B;z-index:20;display:none}
+  /* แจ้งเตือนกลางจอ (toast) */
+  #toast{position:fixed;left:50%;top:18%;transform:translate(-50%,-12px);z-index:40;
+    background:rgba(34,169,91,.95);color:#fff;font-family:'Mitr',sans-serif;
+    padding:10px 22px;border-radius:14px;font-size:1.05rem;opacity:0;pointer-events:none;
+    transition:opacity .25s,transform .25s;box-shadow:0 8px 24px rgba(0,0,0,.25);border:2px solid #FF8A2B}
+  #toast.show{opacity:1;transform:translate(-50%,0)}
+  .ans-btn{
+    transition:background .15s,transform .1s,box-shadow .1s;
+    background:linear-gradient(180deg,#fff 0%,#E8F4FC 100%);
+    border:1px solid rgba(255,138,43,.35) !important;
+    box-shadow:0 3px 0 rgba(26,58,92,.09),0 4px 10px rgba(26,58,92,.08);
+  }
+  .ans-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(26,58,92,.09)}
+  .ans-correct{background:#22A95B !important;color:#fff !important;border-color:#15803D !important}
+  .ans-wrong{background:#E23B2E !important;color:#fff !important;border-color:#A52419 !important}
+  @keyframes pop{0%{transform:scale(.8);opacity:0}100%{transform:scale(1);opacity:1}}
+  .pop{animation:pop .3s ease}
+  /* เลขขั้นตอนในหน้า "วิธีเล่น" */
+  .step-num{flex:none;width:26px;height:26px;border-radius:999px;background:#FF8A2B;color:#fff;
+    font-family:'Mitr',sans-serif;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 2px 0 rgba(26,58,92,.15);margin-top:2px}
+  /* ตัวเลขคะแนนลอยขึ้นตรงจุดเก็บของ */
+  .score-pop{position:fixed;z-index:35;pointer-events:none;font-family:'Mitr',sans-serif;
+    font-weight:700;color:#FFD54F;text-shadow:0 2px 4px rgba(0,0,0,.5);font-size:1.15rem;
+    transform:translate(-50%,-50%);animation:scorePop 1s ease-out forwards}
+  @keyframes scorePop{0%{opacity:0;margin-top:6px}15%{opacity:1}100%{opacity:0;margin-top:-46px}}
+  @keyframes logoFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+  #gameLogo{animation:logoFloat 3.2s ease-in-out infinite;filter:drop-shadow(0 6px 14px rgba(26,58,92,.18))}
+  @media (prefers-reduced-motion:reduce){#gameLogo{animation:none}}
+  .game-logo{font-family:'Mitr',sans-serif;font-weight:700;line-height:1.06;margin:0}
+  .game-logo .brand-sa{display:block;font-size:.78rem;letter-spacing:.22em;color:#1A3A5C;margin-bottom:2px}
+  .game-logo .brand-voxel{display:block;font-size:1.55rem;
+    background:linear-gradient(180deg,#FFC978 0%,#FF8A2B 42%,#E07A1A 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 2px 0 rgba(224,122,26,.22))}
+  .game-logo .brand-adventure{display:block;font-size:1.05rem;letter-spacing:.04em;color:#2E6B9E;margin-top:1px}
+  .rank-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:12px;font-size:13px;line-height:1.35}
+  .rank-row:nth-child(odd){background:rgba(227,240,251,.75)}
+  .rank-row.rank-top1{background:linear-gradient(90deg,#FFF8E1,#fff);border:1px solid rgba(255,138,43,.35)}
+  .rank-row.rank-top2{background:linear-gradient(90deg,#F5F5F5,#fff);border:1px solid rgba(158,158,158,.25)}
+  .rank-row.rank-top3{background:linear-gradient(90deg,#FFF3E0,#fff);border:1px solid rgba(255,183,77,.3)}
+  .rank-medal{width:1.75rem;text-align:center;flex-shrink:0;font-size:1rem}
+  .rank-score{margin-left:auto;font-weight:700;color:#E07A1A;white-space:nowrap}
+
+  /* ── ดีไซน์มิติ (voxel glass) ── */
+  .overlay-dim{background:radial-gradient(ellipse at 50% 20%,rgba(26,58,92,.45),rgba(10,28,48,.72)) !important;backdrop-filter:blur(4px)}
+  .panel-3d{
+    background:linear-gradient(165deg,rgba(255,255,255,.97) 0%,rgba(235,245,255,.93) 55%,rgba(220,236,252,.9) 100%);
+    border:1px solid rgba(255,255,255,.85);
+    box-shadow:0 1px 0 rgba(255,255,255,.95) inset,0 3px 0 rgba(26,58,92,.07),0 14px 32px rgba(26,58,92,.2);
+    backdrop-filter:blur(12px);
+  }
+  .panel-3d-inset{
+    background:linear-gradient(180deg,rgba(227,240,251,.9),rgba(255,255,255,.75));
+    border:1px solid rgba(255,138,43,.25);
+    box-shadow:inset 0 2px 8px rgba(26,58,92,.08),0 6px 16px rgba(26,58,92,.12);
+  }
+  /* แท่นโชว์ตัวละครหน้าโฮม — เวทีไล่สีฟ้า+เงาใต้เท้า */
+  .home-avatar-canvas{
+    width:120px;height:170px;border-radius:16px;
+    background:linear-gradient(180deg,#BDE7FF 0%,#E3F0FB 78%,#CFE6F7 100%);
+    border:2px solid rgba(255,138,43,.4);
+    box-shadow:inset 0 3px 10px rgba(26,58,92,.1),0 4px 12px rgba(26,58,92,.12);
+  }
+  /* ── การ์ดเลือกด่านหน้าโฮม ── */
+  .stage-card{transition:transform .14s,box-shadow .14s,border-color .14s}
+  .stage-card .stage-num{
+    flex-shrink:0;width:2rem;height:2rem;border-radius:999px;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Mitr',sans-serif;font-weight:700;font-size:.95rem;color:#fff;
+    background:linear-gradient(180deg,#FFC978,#FF8A2B);
+    box-shadow:0 2px 0 #C96F2B,inset 0 1px 0 rgba(255,255,255,.5);
+  }
+  .stage-open{border:1px solid rgba(255,138,43,.4)}
+  .stage-open:hover{border-color:#FF8A2B;box-shadow:0 1px 0 rgba(255,255,255,.95) inset,0 6px 0 rgba(26,58,92,.07),0 16px 30px rgba(224,122,26,.22)}
+  .stage-done{border:1px solid rgba(30,138,77,.45)}
+  .stage-done .stage-num{background:linear-gradient(180deg,#7BD49A,#1E8A4D);box-shadow:0 2px 0 #14613A,inset 0 1px 0 rgba(255,255,255,.45)}
+  .stage-locked{
+    background:linear-gradient(180deg,rgba(26,58,92,.08),rgba(26,58,92,.05));
+    border:1px dashed rgba(26,58,92,.22);opacity:.7;
+  }
+  .stage-locked .stage-num{background:linear-gradient(180deg,#B8C4D2,#8A99AB);box-shadow:0 2px 0 rgba(26,58,92,.25)}
+  .stage-locked .stage-emoji{filter:grayscale(.6)}
+  .stage-status{
+    flex-shrink:0;font-family:'Mitr',sans-serif;font-size:11px;font-weight:700;
+    padding:3px 9px;border-radius:999px;white-space:nowrap;line-height:1.4;
+  }
+  .stage-pill-open{color:#E07A1A;background:rgba(255,138,43,.13);border:1px solid rgba(255,138,43,.3)}
+  .stage-pill-done{color:#1E8A4D;background:rgba(30,138,77,.12);border:1px solid rgba(30,138,77,.3)}
+  .stage-pill-lock{color:rgba(26,58,92,.55);background:rgba(26,58,92,.07);border:1px solid rgba(26,58,92,.15)}
+  .btn-3d-primary{
+    background:linear-gradient(180deg,#FFC978 0%,#FF8A2B 48%,#E07A1A 100%);
+    border:1px solid rgba(255,255,255,.45);
+    box-shadow:0 4px 0 #C96F2B,0 10px 22px rgba(224,122,26,.38);
+    color:#fff;
+    transition:transform .12s,box-shadow .12s,filter .12s;
+  }
+  .btn-3d-primary:hover{filter:brightness(1.04)}
+  .btn-3d-primary:active{transform:translateY(3px);box-shadow:0 1px 0 #C96F2B,0 4px 12px rgba(224,122,26,.3)}
+  .btn-3d-secondary{
+    background:linear-gradient(180deg,#fff 0%,#E3F0FB 100%);
+    border:1px solid rgba(255,138,43,.35);
+    box-shadow:0 3px 0 rgba(26,58,92,.1),0 6px 14px rgba(26,58,92,.1);
+    color:#1A3A5C;
+    transition:transform .12s,box-shadow .12s,background .12s;
+  }
+  .btn-3d-secondary:hover{background:linear-gradient(180deg,#fff,#CFE6F7)}
+  .btn-3d-secondary:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(26,58,92,.1)}
+  .btn-3d-accent{
+    background:linear-gradient(180deg,#FFF8E8 0%,#FFE0B2 100%);
+    border:1px solid rgba(255,138,43,.45);
+    box-shadow:0 3px 0 rgba(201,111,43,.25),0 6px 14px rgba(224,122,26,.15);
+    color:#1A3A5C;
+  }
+  .btn-3d-icon{
+    background:linear-gradient(180deg,#fff 0%,#E8F4FC 100%);
+    border:1px solid rgba(255,138,43,.4);
+    box-shadow:0 3px 0 rgba(26,58,92,.1),0 6px 12px rgba(26,58,92,.12);
+    transition:transform .12s,box-shadow .12s;
+  }
+  .btn-3d-icon:hover{background:linear-gradient(180deg,#fff,#D6EBFA)}
+  .btn-3d-icon:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(26,58,92,.1)}
+
+  /* HUD เล่นเกม — เสาซ้าย + ด่านบนกลาง ไม่บังกลางจอ */
+  .hud-col{border-radius:16px;width:7.5rem}
+  .hud-chip{
+    display:flex;align-items:center;justify-content:space-between;gap:6px;
+    border-radius:10px;padding:4px 8px;
+    background:linear-gradient(180deg,rgba(255,255,255,.92),rgba(227,240,251,.85));
+    border:1px solid rgba(255,138,43,.22);
+    box-shadow:0 2px 0 rgba(26,58,92,.06),inset 0 1px 0 rgba(255,255,255,.8);
+    font-family:'Mitr',sans-serif;font-size:11px;line-height:1.2;color:#1A3A5C;
+  }
+  .hud-chip-label{color:rgba(26,58,92,.65);white-space:nowrap}
+  .hud-chip b,.hud-chip .hud-val{font-size:14px;color:#E07A1A;font-weight:700}
+  .hud-chip-hp{display:block}
+  .hud-mission{border-radius:14px}
+  .hud-stage-eyebrow{font-family:'Mitr',sans-serif;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:rgba(26,58,92,.5)}
+  #hudTimer{
+    display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:999px;flex-shrink:0;
+    background:rgba(255,255,255,.65);border:1px solid rgba(255,138,43,.25);font-size:13px;color:#1A3A5C;
+  }
+  .hud-timer-val{font-weight:700;color:#E07A1A;font-variant-numeric:tabular-nums}
+  .hud-hp-track{height:7px;border-radius:999px;background:rgba(26,58,92,.1);border:1px solid rgba(26,58,92,.08);overflow:hidden;
+    box-shadow:inset 0 1px 3px rgba(26,58,92,.12)}
+  #hpFill{height:100%;background:linear-gradient(90deg,#E23B2E,#FF8A2B);box-shadow:0 0 8px rgba(255,138,43,.45)}
+  .gear-pill{
+    border-radius:14px;padding:6px 12px;
+    background:linear-gradient(165deg,rgba(255,255,255,.95),rgba(227,240,251,.9));
+    border:1px solid rgba(255,138,43,.3);
+    box-shadow:0 3px 0 rgba(26,58,92,.08),0 8px 18px rgba(26,58,92,.15);
+    font-family:'Mitr',sans-serif;
+  }
+  .cam-hint-pill{
+    border-radius:12px;padding:6px 10px;max-width:min(92vw,22rem);
+    background:linear-gradient(165deg,rgba(255,255,255,.88),rgba(227,240,251,.82));
+    border:1px solid rgba(255,138,43,.28);
+    box-shadow:0 3px 0 rgba(26,58,92,.07),0 8px 20px rgba(26,58,92,.14);
+    font-family:'Mitr',sans-serif;font-size:10px;line-height:1.45;color:rgba(26,58,92,.78);
+  }
+  .boss-panel{
+    border-radius:16px;padding:8px 12px 10px;
+    background:linear-gradient(165deg,rgba(255,255,255,.94),rgba(255,235,235,.88));
+    border:1px solid rgba(226,59,46,.35);
+    box-shadow:0 4px 0 rgba(165,36,25,.15),0 12px 28px rgba(26,58,92,.2);
+  }
+
+  /* หน้าเริ่ม — ฉากมีมิติ */
+  .start-screen{overflow:hidden}
+  .start-bg{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+  .start-bg__glow{position:absolute;left:50%;top:18%;width:120%;height:70%;transform:translateX(-50%);
+    background:radial-gradient(ellipse,rgba(255,220,140,.35) 0%,transparent 62%)}
+  .start-bg__blocks{position:absolute;inset:0;opacity:.22;
+    background-image:
+      linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px);
+    background-size:28px 28px;
+    transform:perspective(420px) rotateX(58deg) scale(1.4);transform-origin:50% 100%}
+  .start-card{border-radius:24px;position:relative;z-index:2;max-height:min(94vh,700px);overflow-y:auto}
+  .start-crest{border-radius:18px;padding:10px 12px 6px;margin-bottom:8px}
+  .field-3d{
+    background:linear-gradient(180deg,#fff 0%,#E3F0FB 100%);
+    border:1px solid rgba(255,138,43,.32);
+    box-shadow:inset 0 2px 4px rgba(26,58,92,.06),0 3px 0 rgba(26,58,92,.07);
+  }
+  .field-3d:focus{border-color:#FF8A2B;outline:none;box-shadow:inset 0 2px 4px rgba(26,58,92,.06),0 0 0 3px rgba(255,138,43,.25)}
+  .modal-card{border-radius:22px}
+  .quiz-card{border-radius:22px;max-height:min(92vh,640px);overflow-y:auto}
+  .q-picture-frame{border-radius:16px;overflow:hidden;border:2px solid rgba(255,138,43,.4);
+    box-shadow:0 6px 0 rgba(26,58,92,.08),0 16px 28px rgba(26,58,92,.15)}
+  @media (max-width:480px){
+    .hud-col{width:6.25rem}
+    .hud-chip{font-size:10px;padding:3px 6px}
+    .hud-chip b,.hud-chip .hud-val{font-size:12px}
+    #hudZoneName{max-width:34vw}
+    #minimap{width:104px !important;height:104px !important}
+  }
+  /* จอเตี้ย (มือถือ/แท็บเล็ตหมุนนอน หรือจอเกือบสี่เหลี่ยม) — บีบ HUD กันปุ่มมุมขวาล้นออกนอกจอ
+     ใช้แค่ max-height ล้วน (ไม่บังคับ orientation:landscape) เพราะ Codex review เจอช่องโหว่จริง:
+     ความสูง 501-587px (เช่น 720×540) ยังทับกันแม้ >500px และจอเกือบสี่เหลี่ยม (เช่น 480×480)
+     ไม่เข้าเงื่อนไข landscape เลยไม่ถูกบีบ ทั้งที่เตี้ยพอจะทับปุ่มฟันเหมือนกัน */
+  @media (max-height:600px){
+    #hudLeft{width:6rem}
+    .hud-chip{font-size:9px;padding:2px 6px}
+    .hud-chip b,.hud-chip .hud-val{font-size:11px}
+    #hudTop{top:.25rem}
+    #hudZoneName{max-width:28vw;font-size:.8rem}
+    #bossBar{top:3.25rem}
+    #hudRight{top:.25rem;gap:.25rem}
+    #hudRight button{width:2rem;height:2rem;font-size:.9rem}
+    #minimapWrap{padding:2px}
+    #minimap{width:48px !important;height:48px !important}
+    #compassTag{display:none}
+    #attackBtn{width:3.25rem;height:3.25rem;bottom:3.25rem;font-size:1.5rem}
+    #weaponTag{bottom:.25rem}
+    #camHint{display:none}
+  }
+  /* จอเตี้ยมากผิดปกติ (ต่ำกว่า ~320px — ไม่มีอุปกรณ์จริงรุ่นไหนเตี้ยขนาดนี้ แต่ Codex review ทดสอบเจอว่ายังทับ
+     กันอยู่ที่ระดับนี้ จึงกันไว้ให้ครบ) — ซ่อนมินิแมพ+บีบปุ่มเพิ่มอีกชั้น กันปุ่มมุมขวาทับปุ่มฟัน */
+  @media (max-height:320px){
+    #minimapWrap{display:none}
+    #hudRight{gap:.2rem}
+    #hudRight button{width:1.75rem;height:1.75rem;font-size:.75rem}
+    #attackBtn{width:2.5rem;height:2.5rem;bottom:2rem;font-size:1.15rem}
+    #weaponTag{bottom:.15rem}
+  }
+</style>
+</head>
+<body class="bg-[#EAF6FF]">
+
+<div id="scene"></div>
+<div id="nameTag">Player</div>
+<div id="toast"></div>
+
+<!-- HUD — เสาซ้าย (สถานะ) · บนกลาง (ด่าน+เวลา) · ขวาบน (มินิแมพ+กลับ) -->
+<div id="hud" class="hidden fixed inset-0 z-30 pointer-events-none">
+
+  <!-- เสาซ้าย: สถานะผู้เล่น -->
+  <div id="hudLeft" class="hud-col panel-3d fixed top-2 left-2 sm:top-3 sm:left-3 pointer-events-none">
+    <div class="flex flex-col gap-1 p-1.5 sm:p-2">
+      <div class="hud-chip"><span class="hud-chip-label">🏅 Score</span><span id="hudScore" class="hud-val">0</span></div>
+      <!-- กดได้: เปิดรายการคำศัพท์ของด่าน (เรียนแล้ว/ยังไม่เรียน) -->
+      <button id="wordsBtn" class="hud-chip w-full text-left pointer-events-auto cursor-pointer active:scale-95 transition-transform"
+        title="Tap to see this stage's words — learn them all and the boss appears!">
+        <span class="hud-chip-label">📚 Words</span><span><span id="hudLearned" class="hud-val">0</span><span class="text-[#1A3A5C]/50 text-[11px]">/5</span></span></button>
+      <div class="hud-chip hud-chip-hp">
+        <div class="flex items-center justify-between gap-1">
+          <span class="text-[11px]">❤️ HP</span>
+          <span id="hpText" class="mitr text-[10px] text-[#1A3A5C]/75 tabular-nums">100/100</span>
+        </div>
+        <div class="hud-hp-track mt-1"><div id="hpFill" style="width:100%"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- บนกลาง: ด่าน + ชื่อโซน + เวลา -->
+  <div id="hudTop" class="hud-mission panel-3d fixed top-2 sm:top-3 left-1/2 -translate-x-1/2 pointer-events-none">
+    <div class="flex items-center gap-2 px-3 py-1.5">
+      <div class="text-center min-w-0">
+        <div class="hud-stage-eyebrow">Stage <span id="hudStage">1</span>/3</div>
+        <div id="hudZoneName" class="mitr font-bold text-[#1A3A5C] text-sm sm:text-base truncate max-w-[40vw] sm:max-w-[16rem] leading-tight">Directions</div>
+      </div>
+      <!-- จับเวลารวมทั้ง 3 ด่าน (นับขึ้น — ไม่มีหมดเวลา) -->
+      <div id="hudTimer" class="mitr" title="Total play time">
+        <span>⏱️</span><span id="hudTimeLeft" class="hud-timer-val">0:00</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ขวาบน: มินิแมพ + กลับหน้าหลัก -->
+  <div id="hudRight" class="fixed top-2 right-2 sm:top-3 sm:right-3 flex flex-col items-end gap-1.5 pointer-events-auto">
+    <div id="minimapWrap" class="hidden panel-3d rounded-xl p-1">
+      <canvas id="minimap" width="132" height="132" class="rounded-lg block w-[132px] h-[132px]"></canvas>
+      <div id="compassTag" class="mitr text-center text-[11px] font-bold text-[#1A3A5C] mt-1 leading-tight">🧭 Facing South ⬇️</div>
+    </div>
+    <button id="homeBtn" class="btn-3d-icon rounded-xl w-[52px] h-[52px] sm:w-14 sm:h-14 flex items-center justify-center text-2xl" title="Back to menu">🏠</button>
+    <button id="muteBtn" class="btn-3d-icon rounded-xl w-[52px] h-[52px] sm:w-14 sm:h-14 flex items-center justify-center text-2xl" title="Sound effects on/off">🔊</button>
+    <button id="bgmBtn" class="btn-3d-icon rounded-xl w-[52px] h-[52px] sm:w-14 sm:h-14 flex items-center justify-center text-2xl" title="Music on/off">🎵</button>
+    <div class="flex gap-1.5">
+      <button id="zoomOutBtn" class="btn-3d-icon rounded-xl w-[52px] h-[52px] sm:w-14 sm:h-14 flex items-center justify-center text-2xl" title="Zoom out">➖</button>
+      <button id="zoomInBtn" class="btn-3d-icon rounded-xl w-[52px] h-[52px] sm:w-14 sm:h-14 flex items-center justify-center text-2xl" title="Zoom in">➕</button>
+    </div>
+  </div>
+</div>
+
+<!-- แถบเลือดบอส -->
+<div id="bossBar" class="hidden fixed top-[5.5rem] sm:top-[6rem] left-1/2 -translate-x-1/2 z-30 w-[min(300px,88vw)] pointer-events-none">
+  <div class="boss-panel">
+    <div class="text-center mitr text-[#1A3A5C] text-xs sm:text-sm mb-1 font-bold"><span id="bossName">Boss</span></div>
+    <div class="h-3.5 rounded-full bg-white/70 border border-[#FF5A4D]/50 overflow-hidden shadow-inner">
+      <div id="bossHpFill" class="h-full bg-gradient-to-r from-[#FF5A4D] to-[#E23B2E] transition-all duration-300" style="width:100%"></div>
+    </div>
+  </div>
+</div>
+
+<!-- อาวุธ + คีย์ลัด -->
+<div id="weaponTag" class="hidden fixed bottom-3 right-3 z-30 gear-pill pointer-events-none text-[#1A3A5C]">
+  <span class="text-[10px] text-[#1A3A5C]/65 block leading-none">Weapon</span>
+  <span id="weaponIcon" class="text-2xl leading-none">✊</span>
+</div>
+<div id="camHint" class="hidden fixed bottom-3 left-3 z-30 cam-hint-pill pointer-events-none">
+  <b class="text-[#E07A1A]">WASD</b> Move · Drag mouse Look · Wheel Zoom · <b class="text-[#E07A1A]">Space</b> Attack · <b class="text-[#E07A1A]">R</b> Reset
+</div>
+<!-- ปุ่มฟันบนจอ (เฉพาะไอแพด/มือถือ — เปิดด้วย JS เมื่อ isTouch) -->
+<button id="attackBtn" data-ui class="hidden fixed bottom-[5.5rem] right-3 z-40 w-20 h-20 rounded-full
+  bg-[#FF8A2B] border-4 border-white text-white text-4xl leading-none shadow-lg active:scale-95 transition-transform">⚔️</button>
+
+<!-- Start Screen -->
+<div id="startScreen" class="start-screen screen-overlay overlay-dim fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-5">
+  <div class="start-bg" aria-hidden="true"><div class="start-bg__glow"></div><div class="start-bg__blocks"></div></div>
+  <div class="start-card panel-3d w-full max-w-xs p-5 text-center pop">
+    <div class="start-crest panel-3d-inset flex justify-center">
+      <svg id="gameLogo" viewBox="0 0 176 96" width="150" height="82" role="img" aria-label="Sa Kaeo Voxel Adventure">
+        <defs>
+          <linearGradient id="logoSky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#8FD3F0"/><stop offset="100%" stop-color="#BDE7FF"/>
+          </linearGradient>
+        </defs>
+        <rect width="176" height="96" rx="14" fill="url(#logoSky)"/>
+        <!-- sun (voxel steps) -->
+        <rect x="138" y="10" width="22" height="6" fill="#FFD54F"/>
+        <rect x="142" y="6" width="14" height="6" fill="#FFCA28"/>
+        <rect x="146" y="2" width="6" height="6" fill="#FFB300"/>
+        <!-- ground blocks -->
+        <g fill="#43A047"><rect x="4" y="78" width="8" height="8"/><rect x="12" y="78" width="8" height="8"/><rect x="20" y="78" width="8" height="8"/><rect x="28" y="78" width="8" height="8"/><rect x="36" y="78" width="8" height="8"/><rect x="44" y="78" width="8" height="8"/><rect x="52" y="78" width="8" height="8"/><rect x="60" y="78" width="8" height="8"/><rect x="68" y="78" width="8" height="8"/><rect x="76" y="78" width="8" height="8"/><rect x="84" y="78" width="8" height="8"/><rect x="92" y="78" width="8" height="8"/><rect x="100" y="78" width="8" height="8"/><rect x="108" y="78" width="8" height="8"/><rect x="116" y="78" width="8" height="8"/><rect x="124" y="78" width="8" height="8"/><rect x="132" y="78" width="8" height="8"/><rect x="140" y="78" width="8" height="8"/><rect x="148" y="78" width="8" height="8"/><rect x="156" y="78" width="8" height="8"/><rect x="164" y="78" width="8" height="8"/></g>
+        <g fill="#66BB6A"><rect x="4" y="74" width="8" height="4"/><rect x="12" y="74" width="8" height="4"/><rect x="20" y="74" width="8" height="4"/><rect x="28" y="74" width="8" height="4"/><rect x="36" y="74" width="8" height="4"/><rect x="44" y="74" width="8" height="4"/><rect x="52" y="74" width="8" height="4"/><rect x="60" y="74" width="8" height="4"/><rect x="68" y="74" width="8" height="4"/><rect x="76" y="74" width="8" height="4"/><rect x="84" y="74" width="8" height="4"/><rect x="92" y="74" width="8" height="4"/><rect x="100" y="74" width="8" height="4"/><rect x="108" y="74" width="8" height="4"/><rect x="116" y="74" width="8" height="4"/><rect x="124" y="74" width="8" height="4"/><rect x="132" y="74" width="8" height="4"/><rect x="140" y="74" width="8" height="4"/><rect x="148" y="74" width="8" height="4"/><rect x="156" y="74" width="8" height="4"/><rect x="164" y="74" width="8" height="4"/></g>
+        <!-- waterfall + cliff (ปางสีดา) -->
+        <g>
+          <rect x="10" y="50" width="8" height="24" fill="#33691E"/><rect x="18" y="42" width="8" height="32" fill="#2E7D32"/>
+          <rect x="26" y="34" width="8" height="8" fill="#388E3C"/>
+          <rect x="14" y="38" width="4" height="36" fill="#4FC3F7"/><rect x="20" y="30" width="4" height="44" fill="#29B6F6"/>
+          <rect x="26" y="46" width="4" height="28" fill="#81D4FA"/>
+          <rect x="8" y="70" width="24" height="6" fill="#0288D1"/>
+        </g>
+        <!-- temple (ปราสาท) -->
+        <g>
+          <rect x="62" y="66" width="48" height="8" fill="#9C8463"/>
+          <rect x="66" y="58" width="8" height="8" fill="#CBB484"/><rect x="84" y="58" width="8" height="8" fill="#CBB484"/><rect x="102" y="58" width="8" height="8" fill="#CBB484"/>
+          <rect x="64" y="46" width="12" height="12" fill="#E0C896"/><rect x="82" y="38" width="12" height="20" fill="#E0C896"/><rect x="100" y="46" width="12" height="12" fill="#E0C896"/>
+          <rect x="66" y="42" width="8" height="6" fill="#D4B87A"/><rect x="84" y="32" width="8" height="8" fill="#D4B87A"/><rect x="102" y="42" width="8" height="6" fill="#D4B87A"/>
+          <rect x="68" y="38" width="4" height="4" fill="#F5E6C8"/><rect x="86" y="28" width="4" height="4" fill="#F5E6C8"/><rect x="104" y="38" width="4" height="4" fill="#F5E6C8"/>
+        </g>
+        <!-- mountain (เขาฉกรรจ์) -->
+        <g>
+          <rect x="126" y="66" width="32" height="8" fill="#78909C"/>
+          <rect x="130" y="58" width="24" height="8" fill="#90A4AE"/>
+          <rect x="134" y="50" width="16" height="8" fill="#B0BEC5"/>
+          <rect x="138" y="42" width="8" height="8" fill="#ECEFF1"/>
+          <rect x="140" y="38" width="4" height="4" fill="#FFFFFF"/>
+        </g>
+        <!-- butterfly (ผีเสื้อปางสีดา) -->
+        <g>
+          <rect x="44" y="58" width="4" height="4" fill="#FF8A2B"/>
+          <rect x="40" y="54" width="4" height="4" fill="#FF7043"/><rect x="48" y="54" width="4" height="4" fill="#FF7043"/>
+          <rect x="38" y="50" width="4" height="4" fill="#FFB74D"/><rect x="50" y="50" width="4" height="4" fill="#FFB74D"/>
+        </g>
+        <!-- voxel explorer -->
+        <g>
+          <rect x="74" y="48" width="8" height="8" fill="#4FC3F7"/>
+          <rect x="72" y="44" width="12" height="4" fill="#5D4037"/>
+          <rect x="76" y="40" width="4" height="4" fill="#FFCC80"/>
+        </g>
+      </svg>
+    </div>
+    <h1 class="game-logo">
+      <span class="brand-sa">SA KAEO</span>
+      <span class="brand-voxel">Voxel</span>
+      <span class="brand-adventure">Adventure</span>
+    </h1>
+    <p class="text-[#1A3A5C]/75 text-xs sm:text-sm mt-2 mb-4 leading-relaxed">3 stages · Learn 5 words in each · Beat the boss · Race the clock</p>
+    <input id="playerName" maxlength="14" placeholder="Your name (optional)"
+      class="field-3d w-full text-center mitr text-base sm:text-lg px-4 py-2.5 rounded-xl text-[#1A3A5C] placeholder-[#1A3A5C]/40">
+    <div class="flex gap-2 mt-2">
+      <select id="stuClass"
+        class="field-3d flex-1 min-w-0 text-center mitr text-sm sm:text-base px-2 py-2.5 rounded-xl text-[#1A3A5C]">
+        <option value="" disabled selected>Class</option>
+        <option value="6/1">6/1</option>
+        <option value="6/2">6/2</option>
+        <option value="6/3">6/3</option>
+        <option value="6/4">6/4</option>
+        <option value="6/5">6/5</option>
+        <option value="6/6">6/6</option>
+      </select>
+      <select id="stuNo"
+        class="field-3d w-24 text-center mitr text-sm sm:text-base px-2 py-2.5 rounded-xl text-[#1A3A5C]">
+        <option value="" disabled selected>No.</option>
+      </select>
+    </div>
+    <button id="startBtn"
+      class="btn-3d-primary mitr w-full mt-4 py-3 rounded-xl text-base sm:text-lg font-bold">
+      ▶ Start
+    </button>
+    <div class="grid grid-cols-2 gap-2 mt-3">
+      <button id="dressBtn" class="btn-3d-secondary mitr py-2.5 rounded-xl text-sm font-bold">👕 Dress up</button>
+      <button id="howToBtn" class="btn-3d-secondary mitr py-2.5 rounded-xl text-sm font-bold">📖 How to play</button>
+    </div>
+    <button id="rankBtn" class="btn-3d-accent mitr w-full mt-2 py-2.5 rounded-xl text-sm font-bold">🏆 Leaderboard</button>
+    <p class="text-[#1A3A5C]/40 text-[10px] mt-3 leading-snug">© 2569 นายเลิศฤทธิ์ สมศรีเสาร์ · โรงเรียนเทศบาลมิตรสัมพันธ์วิทยา — All rights reserved</p>
+  </div>
+</div>
+
+<!-- หน้าโฮม: เลือกด่าน (level-select) — โผล่หลังกรอกชื่อ
+     จอกว้าง = 2 คอลัมน์ (ด่านซ้าย · ตัวละครขวา) / จอแคบ = ตัวละครบน · ด่านล่าง -->
+<div id="homeScreen" class="hidden overlay-dim fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5">
+  <div class="modal-card panel-3d w-full max-w-3xl p-4 sm:p-6 pop max-h-[96vh] overflow-y-auto">
+
+    <!-- หัวเรื่อง -->
+    <div class="text-center mb-3 sm:mb-4">
+      <h1 class="mitr text-xl sm:text-2xl text-[#FF8A2B] font-bold leading-tight">🗺️ Choose a Stage</h1>
+      <p id="homeHello" class="text-[#1A3A5C]/70 text-xs sm:text-sm mt-0.5">Clear a stage to unlock the next one</p>
+    </div>
+
+    <!-- เนื้อหา 2 คอลัมน์: มือถือ = ตัวละครก่อน(บน) แล้วด่าน(ล่าง) · จอกว้าง = ด่านซ้าย ตัวละครขวา -->
+    <div class="flex flex-col-reverse md:flex-row gap-4 sm:gap-5">
+
+      <!-- คอลัมน์ซ้าย: รายการด่าน -->
+      <div class="md:flex-1 min-w-0">
+        <div class="mitr text-[#1A3A5C]/70 text-xs font-bold mb-2 px-0.5">Pick a stage</div>
+        <div id="stageList" class="flex flex-col gap-2.5"></div>
+        <button id="homeSummaryBtn" class="hidden btn-3d-accent mitr w-full mt-3 py-2.5 rounded-xl text-sm font-bold">🏅 See all 3 stages' scores</button>
+      </div>
+
+      <!-- คอลัมน์ขวา: ตัวละคร + แต่งตัว -->
+      <div class="md:w-56 md:flex-shrink-0">
+        <div class="home-avatar-stage panel-3d-inset rounded-2xl p-3 flex flex-col items-center">
+          <div class="mitr text-[#1A3A5C]/70 text-xs font-bold mb-1">My character</div>
+          <div id="homeAvatarName" class="mitr text-[#E07A1A] text-sm font-bold mb-2 truncate max-w-full">-</div>
+          <canvas id="homeAvatar" width="120" height="170"
+            class="home-avatar-canvas"></canvas>
+          <button id="homeDressBtn" class="btn-3d-primary mitr w-full mt-3 py-2.5 rounded-xl text-sm font-bold">👕 Dress up</button>
+        </div>
+        <button id="homeRankBtn" class="btn-3d-accent mitr w-full mt-2.5 py-2 rounded-xl text-sm font-bold">🏆 Leaderboard</button>
+        <button id="homeHowToBtn" class="btn-3d-secondary mitr w-full mt-2 py-2 rounded-xl text-sm font-bold">📖 How to play</button>
+      </div>
+
+    </div>
+
+    <button id="homeBackBtn" class="btn-3d-icon mitr w-full mt-3 sm:mt-4 py-2 rounded-xl text-xs font-bold">← Exit (change player)</button>
+  </div>
+</div>
+
+<!-- หน้าสรุปคะแนนรวม 3 ด่าน -->
+<div id="summaryScreen" class="hidden overlay-dim fixed inset-0 z-[56] flex items-center justify-center p-4 sm:p-5">
+  <div class="modal-card panel-3d w-full max-w-sm p-5 sm:p-6 pop max-h-[94vh] overflow-y-auto text-center">
+    <div class="text-5xl mb-1">🏆</div>
+    <h1 class="mitr text-xl text-[#FF8A2B] font-bold">Adventure Summary</h1>
+    <p id="summaryName" class="text-[#1A3A5C]/70 text-sm mb-3">-</p>
+    <div id="summaryRows" class="flex flex-col gap-2 text-left"></div>
+    <div class="mt-3 pt-3 border-t border-[#1A3A5C]/10">
+      <div class="flex justify-between mitr text-base"><span class="text-[#1A3A5C]/80">Total score</span><span id="summaryTotal" class="text-[#E07A1A] font-bold text-xl">0</span></div>
+      <div class="flex justify-between mitr text-sm mt-1"><span class="text-[#1A3A5C]/70">Words learned</span><span id="summaryWords" class="text-[#E07A1A] font-bold">0/15</span></div>
+      <div class="flex justify-between mitr text-sm mt-1"><span class="text-[#1A3A5C]/70">⏱️ Total time</span><span id="summaryTime" class="text-[#E07A1A] font-bold">-</span></div>
+    </div>
+    <button id="summaryReplayBtn" class="btn-3d-primary mitr w-full mt-4 py-2.5 rounded-xl text-sm font-bold">🔄 Play again</button>
+    <button id="summaryHomeBtn" class="btn-3d-icon mitr w-full mt-2 py-2 rounded-xl text-xs font-bold">← Back to stages</button>
+  </div>
+</div>
+
+<!-- Leaderboard -->
+<div id="rankModal" class="hidden overlay-dim fixed inset-0 z-[55] flex items-center justify-center p-4 sm:p-5">
+  <div class="modal-card panel-3d w-full max-w-sm p-5 pop max-h-[92vh] flex flex-col">
+    <h2 class="mitr text-xl text-[#FF8A2B] font-bold text-center mb-1">🏆 Leaderboard</h2>
+    <p class="text-center text-[#1A3A5C]/70 text-xs mb-3">Highest score first · best result per player</p>
+    <div id="rankList" class="flex-1 min-h-0 overflow-y-auto space-y-1 mb-3"></div>
+    <button id="rankClose" class="btn-3d-primary mitr w-full py-2.5 rounded-xl text-base font-bold">Close</button>
+  </div>
+</div>
+
+<!-- Dress-up / Inventory Modal (เฟส 2) -->
+<div id="dressModal" class="hidden overlay-dim fixed inset-0 z-[55] flex items-center justify-center p-4">
+  <div class="modal-card panel-3d w-full max-w-md p-5 pop max-h-[92vh] overflow-y-auto">
+    <h2 class="mitr text-2xl text-[#FF8A2B] font-bold text-center mb-3">👕 Dress up</h2>
+
+    <!-- พรีวิวตัวละคร (วาดด้วย canvas) -->
+    <div class="flex justify-center mb-3">
+      <canvas id="avatarPreview" width="120" height="170"
+        class="rounded-2xl bg-gradient-to-b from-[#BDE7FF] to-[#E3F0FB] border-2 border-[#FF8A2B]/40"></canvas>
+    </div>
+
+    <!-- เพศ -->
+    <div class="mb-3">
+      <div class="mitr text-[#1A3A5C]/80 text-sm mb-1.5">🧒 Gender</div>
+      <div id="optGender" class="flex gap-2"></div>
+    </div>
+    <!-- สีเสื้อ -->
+    <div class="mb-3">
+      <div class="mitr text-[#1A3A5C]/80 text-sm mb-1.5">👕 Shirt color</div>
+      <div id="optShirt" class="flex flex-wrap gap-2"></div>
+    </div>
+    <!-- สีกางเกง -->
+    <div class="mb-3">
+      <div class="mitr text-[#1A3A5C]/80 text-sm mb-1.5">👖 Pants color</div>
+      <div id="optPants" class="flex flex-wrap gap-2"></div>
+    </div>
+    <!-- ทรงผม -->
+    <div class="mb-3">
+      <div class="mitr text-[#1A3A5C]/80 text-sm mb-1.5">💇 Hair style</div>
+      <div id="optHair" class="flex flex-wrap gap-2"></div>
+    </div>
+    <!-- สีผม -->
+    <div class="mb-3">
+      <div class="mitr text-[#1A3A5C]/80 text-sm mb-1.5">🎨 Hair color</div>
+      <div id="optHairColor" class="flex flex-wrap gap-2"></div>
+    </div>
+
+    <button id="dressClose" class="btn-3d-primary mitr w-full mt-4 py-3 rounded-xl text-lg font-bold">Done!</button>
+  </div>
+</div>
+
+<!-- How-To Modal (คู่มือการเล่น) -->
+<div id="howToModal" class="hidden overlay-dim fixed inset-0 z-[55] flex items-center justify-center p-4 sm:p-5">
+  <div class="modal-card panel-3d w-full max-w-md p-5 sm:p-6 pop max-h-[92vh] overflow-y-auto">
+    <h2 class="mitr text-2xl text-[#FF8A2B] font-bold text-center mb-1">📖 How to play</h2>
+    <p class="text-center text-[#1A3A5C]/60 text-xs mb-3">Easy! 4 steps</p>
+    <div class="space-y-2.5">
+      <div class="flex items-start gap-3 rounded-2xl bg-[#EAF2FB] p-3">
+        <span class="step-num">1</span><span class="text-3xl leading-none">🚶</span>
+        <div class="flex-1 min-w-0">
+          <div class="mitr text-[#1A3A5C] font-bold leading-tight">Explore the map</div>
+          <div class="text-[13px] text-[#1A3A5C]/75 leading-relaxed">Tap or click the ground to walk there · or press <b>WASD</b>/arrows<br>Turn the camera: right-click drag or <b>Q</b>/<b>E</b> · wheel to zoom · <b>R</b> reset<br>Touchscreen: see the 📱 guide below</div>
+        </div>
+      </div>
+      <div class="flex items-start gap-3 rounded-2xl bg-[#EAF2FB] p-3">
+        <span class="step-num">2</span><span class="text-3xl leading-none">📦</span>
+        <div class="flex-1 min-w-0">
+          <div class="mitr text-[#1A3A5C] font-bold leading-tight">Open treasure boxes and answer</div>
+          <div class="text-[13px] text-[#1A3A5C]/75 leading-relaxed">Correct = <b class="text-[#E07A1A]">+50 points</b>, learn the word + <b>get a weapon/armor right away</b><br>Pick up hearts ❤️ to heal · follow the golden beam to the next box</div>
+        </div>
+      </div>
+      <div class="flex items-start gap-3 rounded-2xl bg-[#EAF2FB] p-3">
+        <span class="step-num">3</span><span class="text-3xl leading-none">⚔️</span>
+        <div class="flex-1 min-w-0">
+          <div class="mitr text-[#1A3A5C] font-bold leading-tight">Watch out for enemies!</div>
+          <div class="text-[13px] text-[#1A3A5C]/75 leading-relaxed">Press <b>Space</b> or the ⚔️ button to attack · don't let enemies hit you<br>HP runs out = restart the stage</div>
+        </div>
+      </div>
+      <div class="flex items-start gap-3 rounded-2xl bg-[#EAF2FB] p-3">
+        <span class="step-num">4</span><span class="text-3xl leading-none">👑</span>
+        <div class="flex-1 min-w-0">
+          <div class="mitr text-[#1A3A5C] font-bold leading-tight">Beat the boss, clear the stage</div>
+          <div class="text-[13px] text-[#1A3A5C]/75 leading-relaxed">Answer all <b class="text-[#E07A1A]">5 words</b> and the boss appears — grab a weapon and defeat it (bare hands = big damage to you)<br>Win to move on · clear all 3 stages = victory 🏆 The game times you, so be quick!</div>
+        </div>
+      </div>
+      <!-- คู่มือควบคุมบนจอสัมผัส (ครูสั่ง 16 ก.ค.) -->
+      <div id="howToTouch" class="flex items-start gap-3 rounded-2xl bg-[#FFF3E4] p-3">
+        <span class="text-3xl leading-none">📱</span>
+        <div class="flex-1 min-w-0">
+          <div class="mitr text-[#1A3A5C] font-bold leading-tight">Touchscreen (tablet/phone)</div>
+          <div class="text-[13px] text-[#1A3A5C]/75 leading-relaxed">☝️ <b>Tap the ground</b> = walk there · <b>Tap a monster</b> = go and attack<br>✌️ <b>Drag with 2 fingers</b> = turn / tilt the view<br>🤏 <b>Pinch</b> = zoom · ⚔️ <b>Orange button (bottom right)</b> = attack</div>
+        </div>
+      </div>
+    </div>
+    <button id="howToClose" class="btn-3d-primary mitr w-full mt-4 py-3 rounded-xl text-lg font-bold">Got it!</button>
+  </div>
+</div>
+
+<!-- 📚 รายการคำศัพท์ของด่าน (เปิดจากชิป HUD ระหว่างเล่น) -->
+<div id="wordsModal" class="hidden overlay-dim fixed inset-0 z-[55] flex items-center justify-center p-4 sm:p-5">
+  <div class="modal-card panel-3d w-full max-w-xs p-5 pop">
+    <h2 class="mitr text-xl text-[#FF8A2B] font-bold text-center mb-1">📚 Words in this stage</h2>
+    <p class="text-center text-[#1A3A5C]/60 text-xs mb-3">Answer them all and the boss appears!</p>
+    <div id="wordsList" class="flex flex-col gap-2"></div>
+    <button id="wordsClose" class="btn-3d-primary mitr w-full mt-4 py-2.5 rounded-xl text-base font-bold">Keep playing!</button>
+  </div>
+</div>
+
+<!-- Question Modal -->
+<div id="quizModal" class="hidden overlay-dim fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-5">
+  <div class="quiz-card panel-3d w-full sm:max-w-sm p-4 sm:p-5 pop rounded-t-3xl sm:rounded-3xl">
+    <div id="qBadge" class="text-center text-[#E07A1A] mitr text-sm mb-1">❓ Question</div>
+    <div id="qPictureWrap" class="hidden flex justify-center mb-3 q-picture-frame">
+      <img id="qPictureImg" alt="" width="360" height="225"
+        class="hidden w-full max-w-full object-cover aspect-[8/5] bg-[#E8F4FC]">
+      <canvas id="qPicture" width="360" height="225"
+        class="hidden w-full max-w-full"></canvas>
+    </div>
+    <div id="qEmoji" class="hidden text-center leading-none mb-2" style="font-size:4.5rem;filter:drop-shadow(0 4px 6px rgba(0,0,0,.2))"></div>
+    <h2 id="qText" class="mitr text-[#1A3A5C] text-xl text-center font-bold mb-4 leading-snug">Question</h2>
+    <div id="qChoices" class="grid grid-cols-1 gap-2.5"></div>
+    <p id="qFeedback" class="text-center mitr mt-3 h-6 text-base"></p>
+    <!-- การ์ดคำศัพท์สรุปหลังตอบ (ถูก/ผิด) — ย้ำคู่คำ อังกฤษ=ไทย ก่อน modal ปิด -->
+    <div id="qWordCard" class="hidden mt-2 rounded-2xl bg-[#FFF3E6] border-2 border-[#FF8A2B]/50 px-3 py-2.5 text-center pop">
+      <span id="qwcEmoji" class="text-4xl align-middle mr-2"></span>
+      <span class="align-middle whitespace-nowrap"><b id="qwcEn" class="mitr text-[#E07A1A] text-xl"></b>
+      <span class="hidden mx-1 text-[#1A3A5C]/50">=</span>
+      <b id="qwcTh" class="hidden mitr text-[#1A3A5C] text-xl"></b></span>
+    </div>
+  </div>
+</div>
+
+<!-- Game Over -->
+<div id="gameOver" class="hidden overlay-dim fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-5"
+     style="background:radial-gradient(ellipse at 50% 30%,rgba(120,20,16,.5),rgba(40,10,8,.75)) !important">
+  <div class="modal-card panel-3d w-full max-w-xs p-6 sm:p-7 text-center pop border border-[#E23B2E]/30">
+    <div class="text-5xl mb-2">💀</div>
+    <h2 id="goTitle" class="mitr text-2xl text-[#E23B2E] font-bold">Caught!</h2>
+    <p id="goReason" class="hidden text-[#1A3A5C]/70 text-sm mt-1"></p>
+    <p class="text-[#1A3A5C]/80 mt-3">Total score <span id="goScore" class="text-[#E07A1A] font-bold text-xl">0</span></p>
+    <p class="text-[#1A3A5C]/80">📚 Words learned <span id="goStars" class="text-[#E07A1A] font-bold text-xl">0</span></p>
+    <button id="retryBtn" class="btn-3d-primary mitr w-full mt-5 py-3 rounded-xl text-lg font-bold">🔄 Play again</button>
+  </div>
+</div>
+
+<!-- 🎉 ป็อปอัพผ่านด่าน (ภาษาอังกฤษ) — กด Next Stage ไปด่านต่อไปทันที ไม่กลับหน้าหลัก -->
+<div id="stageClearModal" class="hidden overlay-dim fixed inset-0 z-[58] flex items-center justify-center p-4">
+  <div class="modal-card panel-3d w-full max-w-xs p-6 text-center pop">
+    <div class="text-6xl mb-2">🎉</div>
+    <h2 class="mitr text-2xl text-[#FF8A2B] font-bold leading-tight">Well done!</h2>
+    <p id="scStageName" class="mitr text-[#1A3A5C] text-base font-bold mt-1">Stage 1 Clear!</p>
+    <p id="scInfo" class="text-[#1A3A5C]/75 text-sm mt-2">You learned 5 new words!</p>
+    <button id="scNextBtn" class="btn-3d-primary mitr w-full mt-5 py-3 rounded-xl text-lg font-bold">Next Stage ▶</button>
+  </div>
+</div>
+
+<!-- 🏆 จอชนะ: ผ่านครบ 3 ด่าน (ภาษาอังกฤษ) + เวลารวมที่ใช้ -->
+<div id="winScreen" class="hidden overlay-dim fixed inset-0 z-[58] flex items-center justify-center p-4">
+  <div class="modal-card panel-3d w-full max-w-sm p-6 sm:p-7 text-center pop">
+    <div class="text-6xl mb-2">🏆</div>
+    <h2 class="mitr text-2xl text-[#FF8A2B] font-bold leading-tight">Congratulations!</h2>
+    <p class="mitr text-[#1A3A5C] text-lg font-bold mt-1">You have completed this lesson!</p>
+    <div class="mt-4 rounded-2xl bg-[#EAF2FB] p-3 text-left space-y-1.5">
+      <div class="flex justify-between mitr text-sm"><span class="text-[#1A3A5C]/70">⏱️ Total time</span><b id="winTime" class="text-[#E07A1A]">0:00</b></div>
+      <div class="flex justify-between mitr text-sm"><span class="text-[#1A3A5C]/70">📚 Words learned</span><b id="winWords" class="text-[#E07A1A]">15</b></div>
+      <div class="flex justify-between mitr text-sm"><span class="text-[#1A3A5C]/70">🏅 Score</span><b id="winScore" class="text-[#E07A1A]">0</b></div>
+    </div>
+    <button id="winSummaryBtn" class="btn-3d-primary mitr w-full mt-5 py-3 rounded-xl text-base font-bold">🏅 See summary</button>
+    <button id="winHomeBtn" class="btn-3d-icon mitr w-full mt-2 py-2 rounded-xl text-xs font-bold">← Back to menu (change player)</button>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   Sa Kaeo Voxel Adventure — ไฟล์สื่อนวัตกรรมประกวด (Three.js)
+   Three.js (voxel) + Tailwind + Web Audio API
+   © 2569 นายเลิศฤทธิ์ สมศรีเสาร์ · โรงเรียนเทศบาลมิตรสัมพันธ์วิทยา
+   สงวนลิขสิทธิ์ — ดูเงื่อนไขการใช้งานที่ไฟล์ LICENSE
+   ============================================================ */
+
+/* ============================================================
+   3 ด่าน = 3 สถานที่จริงของสระแก้ว · ด่านละ 10 คำ (รวม 30)
+   15 คำจากเกมหลัก (ครูตรวจแล้ว) + 15 คำใหม่ (ครูอนุมัติ 2026-06-14)
+   แต่ละคำ: en=อังกฤษ, th=ไทย, emoji=รูป(ใช้แบบฝึก "ดูรูป→เลือกคำ"), distractors=ตัวลวง 3
+   ฉากแต่ละด่าน: sky/fog/ground/building = โทนสีเฉพาะด่าน (ยึดโทนยามเย็น)
+   ============================================================ */
+/* 3 ด่านแยก — น้ำตกปางสีดา → เขาฉกรรจ์ → ปราสาทสด๊กก๊อกธม (ด่านละ 5 คำ = 15 รวม)
+   center ใน ZONES ใช้กับเอกสาร/มินิแมพ; ตอนเล่นฉากวางกลางแมปที่ (0,0) */
+const ZONES = {
+  khao: {
+    name:"Directions", nameEn:"Directions", emoji:"🧭", scene:"khao", center:{x:-52, z:-34},
+    sky:0x7EC8F5, fog:0xBFE4FA, ground:0x6FBF4C, building:[0xC9C2B4,0xBDB6A6,0xD4CDBE],
+    words:[
+      { en:"turn left", th:"เลี้ยวซ้าย", emoji:"⬅️", distractors:["เลี้ยวขวา","ตรงไป","หยุด"] },
+      { en:"turn right", th:"เลี้ยวขวา", emoji:"➡️", distractors:["เลี้ยวซ้าย","ตรงไป","หยุด"] },
+      { en:"go straight", th:"ตรงไป", emoji:"⬆️", distractors:["เลี้ยวซ้าย","เลี้ยวขวา","หัวมุม"] },
+      { en:"stop", th:"หยุด", emoji:"🛑", distractors:["ตรงไป","เลี้ยวซ้าย","หัวมุม"] },
+      { en:"corner", th:"หัวมุม", emoji:"", distractors:["หยุด","ตรงไป","เลี้ยวขวา"] }
+    ]
+  },
+  pangsida: {
+    name:"Places", nameEn:"Places", emoji:"🏥", scene:"pangsida", center:{x:52, z:-34},
+    sky:0x8FD3F0, fog:0xC4E8F8, ground:0x5FB83F, building:[0x3E9E3A,0x86C53A,0x5AAE3C],
+    words:[
+      { en:"hospital", th:"โรงพยาบาล", emoji:"🏥", distractors:["ธนาคาร","สวนสัตว์","ซูเปอร์มาร์เก็ต"] },
+      { en:"bank", th:"ธนาคาร", emoji:"🏦", distractors:["โรงพยาบาล","ห้องสมุด","สวนสัตว์"] },
+      { en:"post office", th:"ที่ทำการไปรษณีย์", emoji:"📮", distractors:["ธนาคาร","โรงพยาบาล","ซูเปอร์มาร์เก็ต"] },
+      { en:"library", th:"ห้องสมุด", emoji:"📚", distractors:["โรงภาพยนตร์","ธนาคาร","สวนสัตว์"] },
+      { en:"cinema", th:"โรงภาพยนตร์", emoji:"🎬", distractors:["ห้องสมุด","โรงพยาบาล","ซูเปอร์มาร์เก็ต"] }
+    ]
+  },
+  prasat: {
+    name:"Positions", nameEn:"Positions", emoji:"📍", scene:"prasat", center:{x:0, z:62},
+    sky:0x8FD3F0, fog:0xCFE7F5, ground:0xCBBE9C, building:[0xE0C896,0x9C8463,0xCBB484],
+    words:[
+      { en:"next to", th:"ข้างๆ", emoji:"", distractors:["ข้างหน้า","ข้างหลัง","ระหว่าง"] },
+      { en:"in front of", th:"ข้างหน้า", emoji:"", distractors:["ข้างๆ","ข้างหลัง","ตรงข้าม"] },
+      { en:"behind", th:"ข้างหลัง", emoji:"", distractors:["ข้างๆ","ข้างหน้า","ระหว่าง"] },
+      { en:"between", th:"ระหว่าง", emoji:"", distractors:["ข้างๆ","ข้างหลัง","ตรงข้าม"] },
+      { en:"opposite", th:"ตรงข้าม", emoji:"", distractors:["ข้างๆ","ข้างหน้า","ระหว่าง"] }
+    ]
+  }
+};
+const ZONE_KEYS = ['pangsida','khao','prasat'];
+/* รวมทุกคำ (15 คำ — โซนละ 5) */
+const ALL_WORDS = ZONE_KEYS.flatMap(k=>ZONES[k].words);
+let currentStageIdx = 0;        // 0=สถานที่ · 1=ทิศทาง · 2=ตำแหน่ง
+function getCurrentZoneKey(){ return ZONE_KEYS[currentStageIdx]; }
+/* ความคืบหน้าหน้าโฮม: ปลดล็อกด่าน + คะแนน/คำศัพท์ที่ทำได้ดีที่สุดต่อด่าน
+   stageDone[i]=true เมื่อปราบบอสด่านนั้นแล้ว · ด่าน 0 ปลดล็อกเสมอ · ด่าน i ปลดล็อกเมื่อ stageDone[i-1] */
+let stageDone   = [false, false, false];
+let stageScore  = [0, 0, 0];     // คะแนนดีสุดต่อด่าน
+let stageWords  = [0, 0, 0];     // จำนวนคำที่เรียนได้ต่อด่าน
+function stageUnlocked(i){ return i === 0 || stageDone[i-1]; }
+function resetProgress(){ stageDone=[false,false,false]; stageScore=[0,0,0]; stageWords=[0,0,0]; }
+function getStageWords(){ return ZONES[getCurrentZoneKey()].words; }
+
+/* สร้างคำถาม: สลับ 2 แบบฝึก (เฉพาะคำในด่านปัจจุบัน)
+   แบบ A "อ่านคำอังกฤษ → เลือกความหมายไทย"
+   แบบ B "ดูรูป → เลือกคำอังกฤษ"
+   คืน {mode, prompt, emoji, choices[], answer}  (prompt = ข้อความโจทย์, emoji = รูปถ้ามี) */
+let questionDeck = [];        // คิวคำในด่าน — สลับให้ครบก่อนซ้ำ
+let lastQuestionEn = '';        // กันคำเดิมซ้ำติดกัน
+
+function resetQuestionDeck(){
+  questionDeck = [];
+  lastQuestionEn = '';
+}
+function refillQuestionDeck(){
+  const words = getStageWords();
+  const unlearned = words.filter(w => !learnedWords.has(w.en)).map(w => w.en);
+  const learned = words.filter(w => learnedWords.has(w.en)).map(w => w.en);
+  questionDeck = [...unlearned, ...learned];
+  for(let i = questionDeck.length - 1; i > 0; i--){
+    const j = (Math.random() * (i + 1)) | 0;
+    [questionDeck[i], questionDeck[j]] = [questionDeck[j], questionDeck[i]];
+  }
+}
+function pickWordForQuestion(){
+  const words = getStageWords();
+  if(!questionDeck.length) refillQuestionDeck();
+  if(questionDeck.length > 1 && questionDeck[0] === lastQuestionEn){
+    questionDeck.push(questionDeck.shift());
+  }
+  const en = questionDeck.shift();
+  lastQuestionEn = en;
+  return words.find(w => w.en === en) || words[0];
+}
+function makeQuestion(){
+  const w = pickWordForQuestion();
+  // หน้าคำถามอังกฤษล้วน (ครูสั่ง 21 พ.ย. 69): A = อ่านคำอังกฤษ → เลือกรูป · B = ดูรูป → เลือกคำอังกฤษ
+  // ทุกคำมีรูปใน assets/word-pics จึงใช้ได้ทั้ง 2 แบบ · ตัวเลือกเก็บเป็นคำอังกฤษ (แบบ A แสดงเป็นรูป)
+  const mode = Math.random() < 0.5 ? 'B' : 'A';
+  const stageWords = getStageWords();
+  const others = stageWords.filter(x=>x.en!==w.en);
+  for(let i=others.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [others[i],others[j]]=[others[j],others[i]]; }
+  const opts = [w.en, others[0].en, others[1].en, others[2].en];
+  const answerVal = w.en;
+  const prompt = mode === 'A' ? 'Which picture is "'+w.en+'"?' : 'What is this?';
+  const emoji = mode === 'B' ? w.emoji : '';
+  // สลับลำดับตัวเลือก
+  for(let i=opts.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [opts[i],opts[j]]=[opts[j],opts[i]]; }
+  return { mode, prompt, emoji, en:w.en, choices:opts, answer:opts.indexOf(answerVal) };
+}
+
+/* รูปประกอบคำศัพท์ — ใหญ่ชัด อ่านออกทันที (ไม่ใช้แค่จุดเล็กๆ) */
+function thForEn(en){
+  const w = ALL_WORDS.find(x=>x.en===en);
+  return w ? w.th : en;
+}
+const PIC_EMOJI_FONT = '128px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
+function picBg(ctx, W, H, sky, ground, split){
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, sky);
+  g.addColorStop(split || 0.68, '#C8E6C9');
+  g.addColorStop(1, ground);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+}
+function picR(ctx, W, H, x, y, w, h, c){
+  ctx.fillStyle = c;
+  ctx.fillRect(x * W, y * H, w * W, h * H);
+}
+function picEmoji(ctx, W, H, emoji, y){
+  ctx.font = PIC_EMOJI_FONT;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(emoji, W / 2, (y == null ? 0.5 : y) * H);
+}
+function drawWordPicture(en){
+  const cv = document.getElementById('qPicture');
+  if(!cv) return;
+  const ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+  const word = ALL_WORDS.find(x => x.en === en);
+
+  switch(en){
+    case 'waterfall': {
+      picBg(ctx, W, H, '#87CEEB', '#2E7D32', 0.55);
+      picR(ctx,W,H, 0.04, 0.1, 0.46, 0.72, '#33691E');
+      picR(ctx,W,H, 0.06, 0.1, 0.42, 0.06, '#558B2F');
+      for(let i = 0; i < 4; i++){
+        picR(ctx,W,H, 0.22 + i * 0.09, 0.16, 0.07, 0.58, '#039BE5');
+        picR(ctx,W,H, 0.24 + i * 0.09, 0.16, 0.03, 0.58, '#E1F5FE');
+      }
+      picR(ctx,W,H, 0.02, 0.74, 0.96, 0.22, '#0277BD');
+      picR(ctx,W,H, 0.08, 0.8, 0.84, 0.1, '#4FC3F7');
+      break;
+    }
+    case 'river': {
+      picBg(ctx, W, H, '#81D4FA', '#388E3C');
+      ctx.fillStyle = '#0288D1';
+      ctx.beginPath();
+      ctx.moveTo(0.05*W, 0.78*H);
+      ctx.bezierCurveTo(0.25*W, 0.55*H, 0.45*W, 0.9*H, 0.65*W, 0.6*H);
+      ctx.bezierCurveTo(0.82*W, 0.38*H, 0.92*W, 0.72*H, 0.98*W, 0.55*H);
+      ctx.lineTo(0.98*W, 0.95*H);
+      ctx.lineTo(0.05*W, 0.95*H);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#B3E5FC';
+      ctx.beginPath();
+      ctx.moveTo(0.15*W, 0.76*H);
+      ctx.bezierCurveTo(0.35*W, 0.62*H, 0.5*W, 0.82*H, 0.7*W, 0.65*H);
+      ctx.lineTo(0.7*W, 0.72*H);
+      ctx.bezierCurveTo(0.5*W, 0.88*H, 0.35*W, 0.68*H, 0.15*W, 0.82*H);
+      ctx.closePath();
+      ctx.fill();
+      break;
+    }
+    case 'forest': {
+      picBg(ctx, W, H, '#90CAF9', '#43A047');
+      for(let i = 0; i < 5; i++){
+        const tx = 0.06 + i * 0.19;
+        const th = 0.28 + (i % 3) * 0.06;
+        picR(ctx,W,H, tx + 0.05, 0.72 - th, 0.04, th + 0.12, '#5D4037');
+        picR(ctx,W,H, tx, 0.72 - th - 0.14, 0.14, th, i % 2 ? '#2E7D32' : '#43A047');
+        picR(ctx,W,H, tx + 0.02, 0.72 - th - 0.2, 0.1, 0.08, '#66BB6A');
+      }
+      break;
+    }
+    case 'mountain': {
+      picBg(ctx, W, H, '#64B5F6', '#7CB342');
+      ctx.fillStyle = '#9E9E9E';
+      ctx.beginPath();
+      ctx.moveTo(0.05*W, 0.78*H); ctx.lineTo(0.28*W, 0.22*H); ctx.lineTo(0.48*W, 0.78*H); ctx.fill();
+      ctx.fillStyle = '#F5F5F5';
+      ctx.beginPath();
+      ctx.moveTo(0.2*W, 0.38*H); ctx.lineTo(0.28*W, 0.22*H); ctx.lineTo(0.36*W, 0.38*H); ctx.fill();
+      ctx.fillStyle = '#BDBDBD';
+      ctx.beginPath();
+      ctx.moveTo(0.32*W, 0.78*H); ctx.lineTo(0.55*W, 0.3*H); ctx.lineTo(0.78*W, 0.78*H); ctx.fill();
+      ctx.fillStyle = '#EEEEEE';
+      ctx.beginPath();
+      ctx.moveTo(0.48*W, 0.46*H); ctx.lineTo(0.55*W, 0.3*H); ctx.lineTo(0.62*W, 0.46*H); ctx.fill();
+      break;
+    }
+    case 'cave': {
+      picBg(ctx, W, H, '#90CAF9', '#689F38');
+      picR(ctx,W,H, 0.08, 0.35, 0.84, 0.5, '#7CB342');
+      picR(ctx,W,H, 0.15, 0.28, 0.7, 0.15, '#558B2F');
+      ctx.fillStyle = '#1B1B1B';
+      ctx.beginPath();
+      ctx.ellipse(0.5*W, 0.62*H, 0.22*W, 0.16*H, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#000000';
+      ctx.beginPath();
+      ctx.ellipse(0.5*W, 0.64*H, 0.16*W, 0.11*H, 0, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+    case 'rock': {
+      picBg(ctx, W, H, '#B3E5FC', '#66BB6A');
+      ctx.fillStyle = '#9E9E9E';
+      ctx.beginPath();
+      ctx.ellipse(0.5*W, 0.58*H, 0.32*W, 0.22*H, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#BDBDBD';
+      ctx.beginPath();
+      ctx.ellipse(0.46*W, 0.5*H, 0.26*W, 0.16*H, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#E0E0E0';
+      ctx.beginPath();
+      ctx.ellipse(0.4*W, 0.46*H, 0.1*W, 0.06*H, -0.4, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+    case 'stone': {
+      picBg(ctx, W, H, '#E0E0E0', '#A1887F');
+      picR(ctx,W,H, 0.22, 0.52, 0.22, 0.18, '#B0BEC5');
+      picR(ctx,W,H, 0.46, 0.48, 0.22, 0.22, '#90A4AE');
+      picR(ctx,W,H, 0.34, 0.36, 0.22, 0.16, '#CFD8DC');
+      picR(ctx,W,H, 0.56, 0.34, 0.18, 0.14, '#B0BEC5');
+      picR(ctx,W,H, 0.28, 0.34, 0.14, 0.12, '#ECEFF1');
+      break;
+    }
+    case 'wall': {
+      picBg(ctx, W, H, '#90CAF9', '#7CB342');
+      for(let row = 0; row < 6; row++) for(let col = 0; col < 8; col++){
+        const off = row % 2 ? 0.03 : 0;
+        picR(ctx,W,H, 0.06 + col * 0.11 + off, 0.18 + row * 0.1, 0.1, 0.08,
+          (row + col) % 2 ? '#C62828' : '#B71C1C');
+        picR(ctx,W,H, 0.065 + col * 0.11 + off, 0.185 + row * 0.1, 0.09, 0.02, '#EF9A9A');
+      }
+      break;
+    }
+    case 'bird': {
+      picBg(ctx, W, H, '#81D4FA', '#AED581');
+      picR(ctx, W, H, 0.1, 0.68, 0.8, 0.04, '#6D4C41');
+      picEmoji(ctx, W, H, '🐦', 0.48);
+      break;
+    }
+    case 'butterfly': {
+      picBg(ctx, W, H, '#F8BBD9', '#A5D6A7');
+      picEmoji(ctx, W, H, '🦋', 0.48);
+      break;
+    }
+    case 'bat': {
+      picBg(ctx, W, H, '#5C6BC0', '#455A64', 0.5);
+      picEmoji(ctx, W, H, '🦇', 0.5);
+      break;
+    }
+    case 'monkey': {
+      picBg(ctx, W, H, '#A5D6A7', '#558B2F');
+      picEmoji(ctx, W, H, '🐒', 0.48);
+      break;
+    }
+    case 'temple': {
+      picBg(ctx, W, H, '#FFE082', '#D7CCC8');
+      picEmoji(ctx, W, H, '🛕', 0.5);
+      break;
+    }
+    case 'angel': {
+      picBg(ctx, W, H, '#E1F5FE', '#FFF9C4');
+      picEmoji(ctx, W, H, '👼', 0.48);
+      break;
+    }
+    case 'king': {
+      picBg(ctx, W, H, '#CE93D8', '#FFD54F');
+      picEmoji(ctx, W, H, '🤴', 0.48);
+      break;
+    }
+    default: {
+      picBg(ctx, W, H, '#B3E5FC', '#81C784');
+      picEmoji(ctx, W, H, word?.emoji || '❓', 0.5);
+    }
+  }
+}
+const WORD_PIC_PATH = en => `assets/word-pics/${en}.jpg`;
+function preloadWordPictures(){
+  ALL_WORDS.forEach(w => { const img = new Image(); img.src = WORD_PIC_PATH(w.en); });
+}
+function showQuizVisual(item){
+  const picWrap = document.getElementById('qPictureWrap');
+  const picImg = document.getElementById('qPictureImg');
+  const picCv = document.getElementById('qPicture');
+  const emojiEl = document.getElementById('qEmoji');
+  if(item.mode !== 'B'){
+    picWrap?.classList.add('hidden');
+    emojiEl?.classList.add('hidden');
+    picImg?.classList.add('hidden');
+    picCv?.classList.add('hidden');
+    return;
+  }
+  picWrap?.classList.remove('hidden');
+  emojiEl?.classList.add('hidden');
+  if(!picImg){
+    picCv?.classList.remove('hidden');
+    drawWordPicture(item.en);
+    return;
+  }
+  const src = WORD_PIC_PATH(item.en);
+  picImg.alt = item.en;
+  picImg.onerror = () => {
+    picImg.classList.add('hidden');
+    picCv?.classList.remove('hidden');
+    drawWordPicture(item.en);
+  };
+  picImg.onload = () => {
+    picImg.classList.remove('hidden');
+    picCv?.classList.add('hidden');
+  };
+  if(picImg.getAttribute('src') === src && picImg.complete && picImg.naturalWidth){
+    picImg.classList.remove('hidden');
+    picCv?.classList.add('hidden');
+  } else {
+    picImg.classList.add('hidden');
+    picCv?.classList.add('hidden');
+    picImg.src = src;
+  }
+}
+
+/* ---------- Web Audio API: เสียงสังเคราะห์ (ไม่ใช้ไฟล์เสียงภายนอก) ---------- */
+let actx = null;
+/* เปิด/ปิดเสียงทั้งเกม — จำค่าไว้ในเครื่อง (ปุ่ม 🔊/🔇 บน HUD) */
+let muted = false;
+try{ muted = localStorage.getItem('sk3d_muted') === '1'; }catch(e){}
+function setMuted(m){
+  muted = m;
+  try{ localStorage.setItem('sk3d_muted', m ? '1' : '0'); }catch(e){}
+  const b = document.getElementById('muteBtn');
+  if(b) b.textContent = muted ? '🔇' : '🔊';
+}
+function audio(){
+  if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
+  // แท็บเล็ต/มือถือบางเครื่อง เบราว์เซอร์แขวนระบบเสียงไว้ (suspended) → ต้องปลุกทุกครั้ง ไม่งั้นเงียบทั้งเกม
+  if(actx.state === 'suspended') actx.resume();
+  return actx;
+}
+/* ปลดล็อกระบบเสียงตั้งแต่แตะจอ/คลิก/กดปุ่มครั้งแรก (นโยบาย autoplay ของเบราว์เซอร์) */
+const unlockAudio = ()=>{ try{ audio(); }catch(e){} };
+window.addEventListener('pointerdown', unlockAudio, {once:true});
+window.addEventListener('keydown', unlockAudio, {once:true});
+/* เล่นโน้ตดิบ (ไม่เช็ค mute — ผู้เรียกเช็คเอง: tone=เอฟเฟกต์ 🔊, BGM=เพลงคลอ 🎵) */
+function playTone(freq, dur, type, vol, slideTo){
+  const a = audio();
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = type; o.frequency.value = freq;
+  if(slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, a.currentTime + dur);
+  g.gain.setValueAtTime(vol, a.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + dur);
+  o.connect(g); g.connect(a.destination);
+  o.start(); o.stop(a.currentTime + dur);
+}
+/* เสียงเอฟเฟกต์ — ดังขึ้น 1.5 เท่า (ครูแจ้งว่าเดิมเบาจนไม่ได้ยิน) */
+function tone(freq, dur, type='sine', vol=0.18, slideTo=null){
+  if(muted) return;
+  playTone(freq, dur, type, Math.min(0.5, vol*1.5), slideTo);
+}
+const SFX = {
+  start:   ()=>{ tone(330,.1,'square',.15); setTimeout(()=>tone(523,.18,'square',.15),90); },
+  pickup:  ()=>{ tone(880,.08,'square',.16); setTimeout(()=>tone(1175,.12,'square',.16),70); },   // เก็บหัวใจ
+  question:()=>{ tone(440,.12,'triangle',.18); setTimeout(()=>tone(660,.12,'triangle',.18),100); },
+  correct: ()=>{ tone(660,.1,'sine',.2); setTimeout(()=>tone(880,.1,'sine',.2),100); setTimeout(()=>tone(1320,.22,'sine',.2),200); },
+  wrong:   ()=>{ tone(220,.35,'sawtooth',.18,90); },
+  over:    ()=>{ tone(440,.18,'sawtooth',.2,220); setTimeout(()=>tone(180,.5,'sawtooth',.2,70),180); },
+  hit:     ()=>{ tone(190,.07,'square',.22,150); setTimeout(()=>tone(140,.07,'square',.16),55); },        // ฟันโดนตัว
+  equip:   ()=>{ tone(523,.08,'triangle',.18); setTimeout(()=>tone(784,.15,'triangle',.18),85); },        // ได้อาวุธ/เกราะ
+  boss:    ()=>{ tone(110,.4,'sawtooth',.22,70); setTimeout(()=>tone(88,.5,'sawtooth',.2,55),330); },     // บอสโผล่ (คำรามต่ำ)
+  stageClear: ()=>{ [523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,.16,'square',.17), i*115)); },// แฟนแฟร์ผ่านด่าน
+  win:     ()=>{ [523,659,784,1047,784,1047,1319].forEach((f,i)=>setTimeout(()=>tone(f, i<6?.18:.55,'triangle',.2), i*150)); } // แฟนแฟร์ใหญ่จบเกม
+};
+
+/* ---------- เพลงคลอเบา ๆ (BGM) — สังเคราะห์ในเครื่อง ไม่ใช้ไฟล์เสียง ----------
+   ปุ่ม 🎵 เปิด/ปิดแยกจากปุ่มเสียงเอฟเฟกต์ 🔊 (จำค่าแยกกันต่อเครื่อง) */
+let bgmMuted = false;
+try{ bgmMuted = localStorage.getItem('sk3d_bgm_muted') === '1'; }catch(e){}
+function setBgmMuted(m){
+  bgmMuted = m;
+  try{ localStorage.setItem('sk3d_bgm_muted', m ? '1' : '0'); }catch(e){}
+  const b = document.getElementById('bgmBtn');
+  if(b) b.textContent = bgmMuted ? '🔕' : '🎵';
+}
+/* ทำนองเพนทาโทนิกนุ่ม ๆ 16 จังหวะวนลูป + เบสคลอทุก 4 จังหวะ — เล่นเฉพาะตอนอยู่ในด่าน */
+const BGM_MELODY = [262,330,392,440,392,330,294,330, 262,330,392,523,440,392,330,294];
+const BGM = {
+  step: 0, timer: null,
+  start(){ if(!this.timer) this.timer = setInterval(()=>this.tick(), 340); },
+  tick(){
+    if(!running || bgmMuted || !actx) return;   // actx ยังไม่เกิด = ผู้เล่นยังไม่แตะจอ อย่าสร้างเองนอก gesture
+    const f = BGM_MELODY[this.step % BGM_MELODY.length];
+    playTone(f, .3, 'sine', .05);
+    if(this.step % 4 === 0) playTone(f/2, .62, 'triangle', .035);
+    this.step++;
+  }
+};
+
+/* ---------- ตัวแปรเกม ---------- */
+const W = window;
+let scene, camera, renderer, clock;
+let player, playerName = "Player", stuClass = "", stuNo = "";
+let enemies = [], qboxes = [], hearts = [];
+let score = 0;
+let running = false, paused = false;
+let walkPhase = 0;
+const MAP = 52;                 // ครึ่งความกว้างลานเล่น (ด่านละฉากเดียว — ไม่กว้างเกิน)
+/* จับเวลารวมทั้ง 3 ด่าน แบบนับขึ้น — ไม่มีนับถอยหลัง/หมดเวลา
+   ครูดูได้ว่านักเรียนแต่ละคนใช้เวลาเล่นจริงเท่าไหร่ (โชว์บน HUD + จอชนะ + อันดับคะแนน) */
+let totalPlaySec = 0;
+function formatPlayTime(sec){
+  const s = Math.max(0, Math.floor(sec));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return m + ':' + String(r).padStart(2, '0');
+}
+function updateTimerHUD(){
+  const el = document.getElementById('hudTimeLeft');
+  if(el) el.textContent = formatPlayTime(totalPlaySec);
+}
+function tickPlayTimer(dt){
+  if(!running || paused) return;
+  totalPlaySec += dt;
+  updateTimerHUD();
+}
+function setGameOverScreen(title, reason){
+  const t = document.getElementById('goTitle');
+  const r = document.getElementById('goReason');
+  if(t) t.textContent = title;
+  if(r){
+    if(reason){ r.textContent = reason; r.classList.remove('hidden'); }
+    else { r.textContent = ''; r.classList.add('hidden'); }
+  }
+}
+const PLAYER_SPEED = 8.5;       // เดินเร็วขึ้น ~20% ลดเวลาเดินหาเป้าหมาย (เดิม 7)
+const ENEMY_SPEED = 2.0;
+/* กล้องมุมสูงหลังผู้เล่น — ปรับได้ด้วย Q/E, ล้อเมาส์, คลิกขวาลาก */
+let camYaw = 0;                 // มุมหมุนรอบผู้เล่น (เรเดียน)
+let camDist = 14;               // ระยะถอยจากผู้เล่น
+let camHeight = 9;              // ความสูงกล้องเหนือหัว
+const CAM_DIST_MIN = 8, CAM_DIST_MAX = 24;
+const CAM_OCCL_MIN_DIST = 3;    // เว้นระยะรอบผู้เล่นก่อนนับเป็น "สิ่งบัง" (เดินทะลุฉาก/หินได้เพราะไม่มี collision — ถ้าไม่เว้นระยะ จะซูมกล้องเข้าเองทุกครั้งที่เดินเข้าใกล้)
+const CAM_ROT_SPEED = 1.1;      // หมุนกล้องช้าลง กันเวียนหัว
+const CAM_DRAG_SENS = 0.0055;   // ความไวหมุนเมื่อลากเมาส์ (ลดลง กันเวียนหัว)
+const CAM_HEIGHT_SENS = 0.028;  // ลากขึ้น-ลงปรับความสูงกล้อง (ลดลง)
+// ตรวจอุปกรณ์อัตโนมัติ: ไอแพด/มือถือ(สัมผัส) vs คอม(เมาส์) — ไม่ต้องให้ผู้เล่นเลือกเอง
+const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+/* ============================================================
+   ระบบ RPG (3 ด่านแยก) — มอนสเตอร์/อาวุธ/เกราะ/บอส
+   ============================================================ */
+/* state ผู้เล่นแบบ RPG (ไม่มีเลเวล — พลังมาจากอาวุธ/เกราะที่ได้จากตอบคำถาม) */
+let pStats = { hp:100, maxhp:100, atk:10, def:0 };
+let heldWeapon = null;          // อาวุธที่ถืออยู่ (object จาก ITEMS) หรือ null
+let heldArmor  = null;          // เกราะที่สวมอยู่ หรือ null
+let attackCooldown = 0;         // หน่วงระหว่างผู้เล่นโจมตี
+let learnedWords = new Set();   // คำศัพท์ที่ตอบถูกแล้ว (นับความคืบหน้า x/15)
+
+/* ไอเท็มที่เก็บได้ (อาวุธ +atk / เกราะ +def) — ดรอปจากตอบถูก & ฆ่ามอนสเตอร์ */
+const ITEMS = {
+  // อาวุธ (เพิ่มพลังโจมตี)
+  banana: { kind:'weapon', icon:'🍌', color:0xF2C84B, name:'Golden Banana',     atk:6  },
+  net:    { kind:'weapon', icon:'🥍', color:0x6ad0c0, name:'Catch Net',       atk:9  },
+  sword:  { kind:'weapon', icon:'⚔️', color:0xcfd6e0, name:'Holy Sword', atk:14 },
+  // เกราะ/เครื่องป้องกัน (เพิ่มพลังป้องกัน)
+  shield: { kind:'armor',  icon:'🛡️', color:0x9ab0d6, name:'Wooden Shield',        def:4  },
+  helmet: { kind:'armor',  icon:'⛑️', color:0xE0C060, name:'Iron Helmet',     def:7  },
+  amulet: { kind:'armor',  icon:'🧿', color:0x6ad0c0, name:'Charm',     def:10 }
+};
+const WEAPON_KEYS = ['banana','net','sword'];
+const ARMOR_KEYS  = ['shield','helmet','amulet'];
+/* รายการอาวุธ (object พร้อม key) — ดึงจาก ITEMS */
+const WEAPONS = WEAPON_KEYS.map(k => ({ key:k, ...ITEMS[k] }));
+/* อาวุธ+เกราะประจำด่าน — ตอบคำถามถูกแล้ว "ได้สวมทันที" ไม่ต้องเดินเก็บ/ไม่มีกระเป๋า
+   (ตอบถูกครั้งแรกของด่าน = อาวุธ · ครั้งถัดไป = เกราะ) */
+const STAGE_GEAR = {
+  pangsida: { weapon:'banana', armor:'shield' },
+  khao:     { weapon:'net',    armor:'helmet' },
+  prasat:   { weapon:'sword',  armor:'amulet' }
+};
+
+/* ชนิดมอนสเตอร์ — แต่ละชนิด HP/ATK ต่างกัน + ดรอปไอเท็มเมื่อตาย
+   zone = โซนที่มันเกิด (khao/pangsida/prasat) · model = วิธีวาด voxel */
+const MONSTERS = {
+  monkey:    { name:'Monkey',     icon:'🐒', zone:'khao',     hp:14, atk:4,  speed:2.3, color:0x8a5a2a, drop:'banana' },
+  bat:       { name:'Bat', icon:'🦇', zone:'khao',     hp:10, atk:6,  speed:2.8, color:0x3a2a45, drop:'shield' },
+  butterfly: { name:'Butterfly', icon:'🦋', zone:'pangsida', hp:12, atk:5,  speed:2.5, color:0xE86A9A, drop:'net'    },
+  croc:      { name:'Crocodile',  icon:'🐊', zone:'pangsida', hp:22, atk:8,  speed:1.6, color:0x3a6a2e, drop:'helmet' },
+  angel:     { name:'Angel',   icon:'👼', zone:'prasat',   hp:30, atk:11, speed:1.8, color:0xE0D8B0, drop:'sword'  }
+};
+/* มอนสเตอร์ต่อด่าน (2 ตัว/ชนิด) */
+const STAGE_MONSTERS = {
+  pangsida: [],   // ด่านน้ำตก: ไม่มีศัตรูเดินสุ่ม เหลือแค่บอสผีเสื้อยักษ์ (โผล่เมื่อตอบครบ 5 คำ)
+  khao:     [{ key:'monkey', n:2 }, { key:'bat', n:2 }],
+  prasat:   [{ key:'angel', n:2 }, { key:'angel', n:2 }]
+};
+let bossSpawned = false;
+
+/* ============================================================
+   เฟส 2 — กระเป๋า + แต่งตัว (avatar / inventory)
+   ============================================================ */
+/* ตัวเลือกแต่งตัว: สีเสื้อ / สีกางเกง / ทรงผม (สี+ทรง)
+   เก็บเป็น "ดัชนี" ลง localStorage (sk3d_avatar) ให้คงค่าข้ามรอบเล่น */
+const SHIRT_COLORS = [
+  { name:'Blue',     color:0x2B6FB3 },
+  { name:'Red',     color:0xC0392B },
+  { name:'Green',   color:0x1E8A4D },
+  { name:'Purple',    color:0x7d4bb3 },
+  { name:'Orange',  color:0xF2A33C },
+  { name:'Pink',    color:0xE86A9A }
+];
+const PANTS_COLORS = [
+  { name:'Navy',  color:0x39406b },
+  { name:'Brown',  color:0x6b4a2a },
+  { name:'Gray',     color:0x555a66 },
+  { name:'Olive', color:0x4a5a2a },
+  { name:'Black',      color:0x222633 }
+];
+/* ทรงผม: style = รูปทรง(วิธีสร้างใน buildHair), color = สีผม */
+const HAIR_STYLES = [
+  { name:'Short',    style:'short' },
+  { name:'Crew cut',  style:'crop'  },
+  { name:'Ponytail',  style:'pony'  },
+  { name:'Cap', style:'cap'  }
+];
+const HAIR_COLORS = [
+  { name:'Black',      color:0x2b1d12 },
+  { name:'Brown',  color:0x5a3a1a },
+  { name:'Blonde',     color:0xC9A14B },
+  { name:'Dark red', color:0x7d2419 }
+];
+/* เพศ: เปลี่ยนรูปร่างตัวละคร — boy=ลำตัวกล่อง ขากางเกง · girl=ลำตัวทรงกระโปรง ขาเรียว */
+const GENDERS = [
+  { name:'Boy',  key:'boy',  icon:'👦' },
+  { name:'Girl', key:'girl', icon:'👧' }
+];
+
+/* state การแต่งตัวปัจจุบัน (ดัชนีในอาเรย์ด้านบน) */
+let avatar = { gender:0, shirt:0, pants:0, hair:0, hairColor:0 };
+
+/* โหลด/บันทึก state จาก localStorage */
+function loadProfile(){
+  try{
+    const a = JSON.parse(localStorage.getItem('sk3d_avatar')||'null');
+    if(a && typeof a==='object'){
+      avatar.gender    = clampIdx(a.gender,    GENDERS);
+      avatar.shirt     = clampIdx(a.shirt,     SHIRT_COLORS);
+      avatar.pants     = clampIdx(a.pants,     PANTS_COLORS);
+      avatar.hair      = clampIdx(a.hair,      HAIR_STYLES);
+      avatar.hairColor = clampIdx(a.hairColor, HAIR_COLORS);
+    }
+  }catch(e){}
+}
+function clampIdx(v, arr){ v = (v|0); return (v>=0 && v<arr.length) ? v : 0; }
+function saveAvatar(){ try{ localStorage.setItem('sk3d_avatar', JSON.stringify(avatar)); }catch(e){} }
+
+/* ---------- อันดับคะแนนแข่งขัน (localStorage) ---------- */
+const SCORE_KEY = 'sk3d_scores';
+function loadScoreLog(){
+  try{ return JSON.parse(localStorage.getItem(SCORE_KEY) || '[]'); }catch(e){ return []; }
+}
+function studentKey(entry){
+  return [(entry.cls||'').trim(), (entry.no||'').trim(), (entry.name||'').trim()].join('|');
+}
+function entryStages(entry){
+  if(entry.stagesCleared != null) return entry.stagesCleared|0;
+  if(entry.stages != null) return entry.stages|0;
+  return 0;
+}
+function compareScoreEntries(a, b){
+  if(b.score !== a.score) return b.score - a.score;
+  const ds = entryStages(b) - entryStages(a);
+  if(ds) return ds;
+  if(!!b.won !== !!a.won) return (b.won ? 1 : 0) - (a.won ? 1 : 0);
+  // คะแนน/ด่าน/ชนะ เท่ากันหมด → ใครใช้เวลารวมน้อยกว่าอยู่อันดับสูงกว่า (record เก่าไม่มี time ให้ไปท้าย)
+  return (a.time == null ? 1e9 : a.time) - (b.time == null ? 1e9 : b.time);
+}
+function isScoreBetter(a, b){ return compareScoreEntries(a, b) < 0; }
+function getLeaderboardRows(){
+  const best = new Map();
+  loadScoreLog().forEach(entry => {
+    if(!entry || !entry.name) return;
+    const key = studentKey(entry);
+    const cur = best.get(key);
+    if(!cur || isScoreBetter(entry, cur)) best.set(key, entry);
+  });
+  return [...best.values()].sort(compareScoreEntries);
+}
+function currentScoreSnapshot(won){
+  return {
+    name: playerName,
+    cls: stuClass,
+    no: stuNo,
+    score,
+    time: Math.round(totalPlaySec),   // เวลารวมที่ใช้เล่น (วินาที) — ครูดูได้จากอันดับคะแนน
+    stagesCleared: won ? 3 : currentStageIdx,
+    won: !!won,
+    t: Date.now()
+  };
+}
+function saveScoreRecord(won){
+  try{
+    const log = loadScoreLog();
+    log.push(currentScoreSnapshot(won));
+    if(log.length > 250) log.splice(0, log.length - 250);
+    localStorage.setItem(SCORE_KEY, JSON.stringify(log));
+  }catch(e){}
+}
+function rankMedal(i){
+  return i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : String(i + 1);
+}
+function renderLeaderboard(){
+  const list = document.getElementById('rankList');
+  if(!list) return;
+  list.textContent = '';
+  const rows = getLeaderboardRows();
+  if(!rows.length){
+    const empty = document.createElement('p');
+    empty.className = 'text-center text-[#1A3A5C]/60 mitr text-sm py-8';
+    empty.textContent = 'No scores yet — play and it saves automatically';
+    list.appendChild(empty);
+    return;
+  }
+  rows.slice(0, 30).forEach((entry, i) => {
+    const row = document.createElement('div');
+    row.className = 'rank-row' + (i === 0 ? ' rank-top1' : i === 1 ? ' rank-top2' : i === 2 ? ' rank-top3' : '');
+    const medal = document.createElement('div');
+    medal.className = 'rank-medal mitr';
+    medal.textContent = rankMedal(i);
+    const info = document.createElement('div');
+    info.className = 'min-w-0 text-left';
+    const title = document.createElement('div');
+    title.className = 'mitr font-bold text-[#1A3A5C] truncate';
+    const clsNo = [entry.cls, entry.no ? 'No. '+entry.no : ''].filter(Boolean).join(' · ');
+    title.textContent = entry.name + (clsNo ? ' · ' + clsNo : '');
+    const sub = document.createElement('div');
+    sub.className = 'text-[11px] text-[#1A3A5C]/65';
+    const st = entryStages(entry);
+    sub.textContent = (entry.won ? 'Cleared all 3 stages' : 'Cleared '+st+(st===1 ? ' stage' : ' stages'))
+      + (entry.time ? ' · ⏱️ '+formatPlayTime(entry.time) : '');
+    info.appendChild(title);
+    info.appendChild(sub);
+    const pts = document.createElement('div');
+    pts.className = 'rank-score mitr';
+    pts.textContent = (entry.score|0).toLocaleString();
+    row.appendChild(medal);
+    row.appendChild(info);
+    row.appendChild(pts);
+    list.appendChild(row);
+  });
+}
+function openLeaderboard(){
+  renderLeaderboard();
+  document.getElementById('rankModal').classList.remove('hidden');
+}
+function closeLeaderboard(){
+  document.getElementById('rankModal').classList.add('hidden');
+}
+/* ---------- UI แต่งตัว (เฟส 2) ---------- */
+function hex(n){ return '#'+n.toString(16).padStart(6,'0'); }
+
+/* วาดตัวละครพรีวิว 2D บน canvas ให้ตรงกับ buildPlayer (สี/ทรงผม) */
+function drawAvatarPreview(canvasId){
+  const cv = document.getElementById(canvasId || 'avatarPreview');
+  if(!cv) return;
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0,0,cv.width,cv.height);
+  const cx = cv.width/2;
+  const skin  = '#F2C49B';
+  const shirt = hex(SHIRT_COLORS[avatar.shirt].color);
+  const pants = hex(PANTS_COLORS[avatar.pants].color);
+  const hairC = hex(HAIR_COLORS[avatar.hairColor].color);
+  const style = HAIR_STYLES[avatar.hair].style;
+  const isGirl = GENDERS[avatar.gender].key === 'girl';
+  if(isGirl){
+    // ขาเรียว (สีผิว)
+    ctx.fillStyle = skin;
+    ctx.fillRect(cx-14, 128, 11, 30);
+    ctx.fillRect(cx+3,  128, 11, 30);
+    // กระโปรง (สีกางเกง) ทรงสอบกว้างล่าง
+    ctx.fillStyle = pants;
+    ctx.beginPath();
+    ctx.moveTo(cx-18, 116); ctx.lineTo(cx+18, 116);
+    ctx.lineTo(cx+30, 132); ctx.lineTo(cx-30, 132);
+    ctx.closePath(); ctx.fill();
+    // ลำตัว (เสื้อ) เอวสอบเล็กน้อย
+    ctx.fillStyle = shirt;
+    ctx.fillRect(cx-23, 72, 46, 48);
+  } else {
+    // ขากางเกง
+    ctx.fillStyle = pants;
+    ctx.fillRect(cx-20, 120, 16, 38);
+    ctx.fillRect(cx+4,  120, 16, 38);
+    // ลำตัว (เสื้อ)
+    ctx.fillStyle = shirt;
+    ctx.fillRect(cx-26, 72, 52, 52);
+  }
+  // แขน
+  ctx.fillStyle = skin;
+  ctx.fillRect(cx-38, 74, 12, 44);
+  ctx.fillRect(cx+26, 74, 12, 44);
+  // หัว
+  ctx.fillStyle = skin;
+  ctx.fillRect(cx-22, 30, 44, 44);
+  // ผม ตามทรง
+  ctx.fillStyle = hairC;
+  if(style === 'cap'){
+    ctx.fillRect(cx-24, 22, 48, 16);          // หมวก
+    ctx.fillRect(cx-24, 36, 30, 6);           // ปีกหน้า
+  } else if(style === 'crop'){
+    ctx.fillRect(cx-23, 26, 46, 9);           // รองทรงบาง
+  } else if(style === 'pony'){
+    ctx.fillRect(cx-23, 22, 46, 14);          // คลุมหัว
+    ctx.fillRect(cx+18, 36, 10, 40);          // หางม้า
+  } else {
+    ctx.fillRect(cx-23, 22, 46, 16);          // ผมสั้นคลุม
+    ctx.fillRect(cx-23, 38, 8, 16);
+    ctx.fillRect(cx+15, 38, 8, 16);
+  }
+  // ตา
+  ctx.fillStyle = '#2b2233';
+  ctx.fillRect(cx-12, 48, 5, 6);
+  ctx.fillRect(cx+7,  48, 5, 6);
+}
+
+/* สร้างปุ่ม swatch สี (วงกลม) ให้เลือก — เลือกแล้ว highlight + อัปเดต preview */
+function buildSwatches(containerId, arr, getIdx, setIdx){
+  const wrap = document.getElementById(containerId);
+  wrap.innerHTML = '';
+  arr.forEach((item, i)=>{
+    const b = document.createElement('button');
+    b.title = item.name;
+    b.className = 'w-9 h-9 rounded-full border-[3px] transition-transform active:scale-95';
+    b.style.background = hex(item.color);
+    b.style.borderColor = (i === getIdx()) ? '#FF8A2B' : 'rgba(26,58,92,.25)';
+    b.onclick = ()=>{
+      setIdx(i);
+      saveAvatar();
+      drawAvatarPreview();
+      // รีเฟรช highlight ในแถวนี้
+      [...wrap.children].forEach((c,ci)=> c.style.borderColor = (ci===i)?'#FF8A2B':'rgba(26,58,92,.25)');
+    };
+    wrap.appendChild(b);
+  });
+}
+
+/* แถวเลือกเพศ (ปุ่มไอคอน+ข้อความ) — เปลี่ยนแล้ววาดพรีวิวรูปร่างใหม่ */
+function buildGenderBtns(){
+  const wrap = document.getElementById('optGender');
+  wrap.innerHTML = '';
+  GENDERS.forEach((g, i)=>{
+    const b = document.createElement('button');
+    b.innerHTML = '<span class="text-lg align-middle">'+g.icon+'</span> '+g.name;
+    b.className = 'mitr text-sm flex-1 px-3 py-2 rounded-lg border-2 transition-transform active:scale-95 ' +
+      (i===avatar.gender ? 'bg-[#FF8A2B] text-white border-[#FF8A2B]' : 'bg-[#E3F0FB] text-[#1A3A5C] border-[#FF8A2B]/30');
+    b.onclick = ()=>{
+      avatar.gender = i;
+      saveAvatar();
+      drawAvatarPreview();
+      buildGenderBtns();
+    };
+    wrap.appendChild(b);
+  });
+}
+
+/* แถวเลือกทรงผม (ปุ่มข้อความ ไม่ใช่สี) */
+function buildHairStyleBtns(){
+  const wrap = document.getElementById('optHair');
+  wrap.innerHTML = '';
+  HAIR_STYLES.forEach((h, i)=>{
+    const b = document.createElement('button');
+    b.textContent = h.name;
+    b.className = 'mitr text-sm px-3 py-1.5 rounded-lg border-2 transition-transform active:scale-95 ' +
+      (i===avatar.hair ? 'bg-[#FF8A2B] text-white border-[#FF8A2B]' : 'bg-[#E3F0FB] text-[#1A3A5C] border-[#FF8A2B]/30');
+    b.onclick = ()=>{
+      avatar.hair = i;
+      saveAvatar();
+      drawAvatarPreview();
+      buildHairStyleBtns();
+    };
+    wrap.appendChild(b);
+  });
+}
+
+/* เปิด modal แต่งตัว: เรนเดอร์ทุกแถว + preview */
+function openDressUp(){
+  buildGenderBtns();
+  buildSwatches('optShirt', SHIRT_COLORS, ()=>avatar.shirt, i=>avatar.shirt=i);
+  buildSwatches('optPants', PANTS_COLORS, ()=>avatar.pants, i=>avatar.pants=i);
+  buildSwatches('optHairColor', HAIR_COLORS, ()=>avatar.hairColor, i=>avatar.hairColor=i);
+  buildHairStyleBtns();
+  drawAvatarPreview();
+  document.getElementById('dressModal').classList.remove('hidden');
+}
+function closeDressUp(){
+  document.getElementById('dressModal').classList.add('hidden');
+  if(player) rebuildPlayer();   // อัปเดตตัวละครในฉากให้ตรงกับที่เลือก (เผื่อกำลังเล่นอยู่)
+  // ถ้าอยู่หน้าโฮม → วาดตัวละครกลางหน้าโฮมใหม่ให้ตรงกับชุดที่เพิ่งเลือก
+  if(!document.getElementById('homeScreen').classList.contains('hidden')){
+    drawAvatarPreview('homeAvatar');
+  }
+}
+
+/* ทิศที่กดอยู่ + หมุนกล้อง */
+const keys = { up:false, down:false, left:false, right:false, camLeft:false, camRight:false };
+let moveTarget = null;          // {x,z} จุดหมายที่คลิก/แตะบนพื้น → เดินไปเอง
+let attackTarget = null;        // มอนสเตอร์/บอสที่คลิกล็อกเป้าไว้ → เดินเข้าไปฟันเอง
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+// กล้องกันมุด (occlusion): ยิงรังสีจากหัวผู้เล่น→จุดกล้อง ถ้ามีวัตถุทึบขวางให้ดึงกล้องมาอยู่หน้าวัตถุ
+const camRay = new THREE.Raycaster();
+const camLookV = new THREE.Vector3(), camWantV = new THREE.Vector3(), camDirV = new THREE.Vector3();
+
+/* หา "ตัวมอนสเตอร์ระดับบนสุด" จาก mesh ลูกที่ raycast ไปโดน */
+function enemyFromHit(obj){
+  let o = obj;
+  while(o){
+    if(enemies.includes(o) || (boss && o === boss)) return o;
+    o = o.parent;
+  }
+  return null;
+}
+
+/* ---------- helper สุ่ม ---------- */
+function rand(a, b){ return a + Math.random() * (b - a); }   // ทศนิยมในช่วง [a,b)
+function pick(arr){ return arr[(Math.random() * arr.length) | 0]; }  // สุ่ม 1 ตัวจาก array
+
+/* ---------- แจ้งเตือนกลางจอ (toast) ---------- */
+let _toastTimer = null;
+function toast(msg, ms = 1200){
+  const el = document.getElementById('toast');
+  if(!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), ms);
+}
+
+/* ---------- วิธีเล่น: เปิดอัตโนมัติครั้งแรกของเครื่อง + ทิปสอนนาทีแรก ---------- */
+const HOWTO_SEEN_KEY = 'sk3d_howto_seen';
+function howToSeen(){ try{ return !!localStorage.getItem(HOWTO_SEEN_KEY); }catch(e){ return true; } }
+function markHowToSeen(){ try{ localStorage.setItem(HOWTO_SEEN_KEY,'1'); }catch(e){} }
+/* เปิดเอง = นับว่าเคยเห็นแล้ว จะได้ไม่เด้งซ้ำตอนเริ่มเกม */
+function openHowTo(){ markHowToSeen(); document.getElementById('howToModal').classList.remove('hidden'); }
+function closeHowTo(){ document.getElementById('howToModal').classList.add('hidden'); }
+
+/* ทิปสอนตามจังหวะ: โชว์ครั้งเดียวต่อการเปิดหน้า (ใช้ toast เดิม ไม่บังจอ) */
+let _tipsDone = {};
+function tipOnce(key, msg, ms){ if(_tipsDone[key]) return; _tipsDone[key] = true; toast(msg, ms || 3000); }
+function scheduleStarterTips(){
+  setTimeout(()=>{ if(running && !paused) tipOnce('walk', '🚶 Tap/click the ground or press WASD to walk', 3200); }, 2600);
+  setTimeout(()=>{ if(running && !paused) tipOnce('qbox', '📦 Walk into a treasure box and answer the question', 3200); }, 6800);
+}
+
+/* ---------- 📚 รายการคำศัพท์ของด่าน: เรียนแล้วโชว์คู่คำ · ยังไม่เรียนเป็นปริศนา (กันแอบดูเฉลย) ---------- */
+function openWordList(){
+  if(!running) return;
+  paused = true;
+  const list = document.getElementById('wordsList');
+  list.innerHTML = '';
+  getStageWords().forEach(w=>{
+    const learned = learnedWords.has(w.en);
+    const row = document.createElement('div');
+    row.className = 'flex items-center gap-2 rounded-xl p-2 ' + (learned ? 'bg-[#E8F7EE]' : 'bg-[#EAF2FB]');
+    row.innerHTML = learned
+      ? '<span class="text-2xl">'+w.emoji+'</span><span class="flex-1 min-w-0 mitr text-[#1A3A5C] font-bold truncate">'+w.en+'</span><span class="text-[#22A95B]">✅</span>'
+      : '<span class="text-2xl">❓</span><span class="flex-1 min-w-0 mitr text-[#1A3A5C]/40 font-bold tracking-widest">? ? ?</span><span class="text-[11px] text-[#1A3A5C]/50 whitespace-nowrap">Find it in a treasure box</span>';
+    list.appendChild(row);
+  });
+  document.getElementById('wordsModal').classList.remove('hidden');
+}
+function closeWordList(){
+  document.getElementById('wordsModal').classList.add('hidden');
+  if(running) paused = false;
+}
+
+function resetCamera(){
+  camYaw = 0; camDist = 14; camHeight = 9;
+}
+
+function gameInputActive(){
+  if(!running || paused) return false;
+  return document.getElementById('quizModal').classList.contains('hidden')
+      && document.getElementById('howToModal').classList.contains('hidden')
+      && document.getElementById('rankModal').classList.contains('hidden')
+      && document.getElementById('dressModal').classList.contains('hidden')
+      && document.getElementById('wordsModal').classList.contains('hidden')
+      && document.getElementById('gameOver').classList.contains('hidden');
+}
+
+/* ---------- helper สร้างกล่อง voxel ---------- */
+function box(w,h,d,color){
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(w,h,d),
+    new THREE.MeshLambertMaterial({color})
+  );
+  m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
+
+/* ---------- สร้างโมเดลอาวุธ voxel (ถือในมือขวา) ----------
+   แนบเข้า player.armR ที่ปลายแขน — เรียกจาก equipItem() และ buildPlayer() */
+function buildWeaponMesh(itemKey){
+  const it = ITEMS[itemKey];
+  if(!it || it.kind !== 'weapon') return null;
+  // origin (y=0) = จุดที่ "มือกำด้าม" · ส่วนใช้งานของอาวุธยื่นขึ้นไปด้านบน (+y)
+  // เวลาแนบเข้ามือจะหมุนให้แกน +y นี้ชี้ออกไปข้างหน้าตัวละคร
+  const g = new THREE.Group();
+  if(itemKey === 'sword'){
+    // ดาบ: ด้ามจับอยู่ที่มือ → การ์ด → ใบดาบยาวชี้ออก
+    const grip  = box(0.18, 0.4, 0.18, 0x6B4A2B); grip.position.y = 0.0;  g.add(grip);   // ด้ามอยู่ที่มือ
+    const guard = box(0.55, 0.16, 0.3, 0xC9A227); guard.position.y = 0.24; g.add(guard);  // การ์ด
+    const blade = box(0.18, 1.3, 0.18, it.color); blade.position.y = 1.0;  g.add(blade);  // ใบดาบยื่นออก
+  } else if(itemKey === 'net'){
+    // สวิงจับ: ด้ามไม้อยู่ที่มือ → ห่วงตาข่ายปลายด้าม
+    const handle = box(0.16, 1.0, 0.16, 0x6B4A2B); handle.position.y = 0.5; g.add(handle); // ด้ามจากมือยื่นออก
+    const ring   = box(0.7, 0.7, 0.1,  it.color);  ring.position.y = 1.2;  g.add(ring);    // ห่วงปลายด้าม
+  } else {
+    // กล้วยทอง: ด้ามที่มือ → ปลายโค้งขึ้น
+    const b1 = box(0.28, 0.8, 0.28, it.color); b1.position.y = 0.35; g.add(b1);
+    const b2 = box(0.28, 0.3, 0.28, it.color); b2.position.set(0.13, 0.75, 0); g.add(b2);
+  }
+  return g;
+}
+/* อัปเดตอาวุธในมือผู้เล่นให้ตรงกับ heldWeapon (ลบของเก่า → ใส่ของใหม่) */
+function updateWeaponMesh(){
+  if(!player || !player.armR) return;
+  // ลบอาวุธเดิมออกก่อน
+  if(player.weaponMesh){ player.armR.remove(player.weaponMesh); player.weaponMesh = null; }
+  if(!heldWeapon) return;
+  const mesh = buildWeaponMesh(heldWeapon.key);
+  if(!mesh) return;
+  // armR หมุนจากไหล่ (geometry แปลขึ้น -0.65) ปลายมืออยู่ที่ y ≈ -1.3 จากตำแหน่งไหล่
+  // วางอาวุธที่ปลายมือ แล้วหมุน +1.35 rad ให้แกน +y ของอาวุธ (ใบดาบ) ชี้ออก "หน้า"
+  // ตัวละคร (−Z local) เงยปลายขึ้นจากแนวนอนเล็กน้อย ดูสง่า · ดันออกหน้า (z=-0.5) ให้พ้นลำตัว
+  mesh.position.set(0, -1.15, -0.5);
+  mesh.rotation.x = 1.35;
+  player.armR.add(mesh);
+  player.weaponMesh = mesh;
+}
+
+/* ---------- สร้างฉาก ---------- */
+let groundMesh = null;                 // เก็บไว้เปลี่ยนสีตามด่าน
+let envGroup = null;                    // กลุ่มตึก/ต้นไม้ (สร้างใหม่ทุกด่าน)
+
+function initScene(){
+  const L = ZONES.pangsida;
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(L.sky);            // ท้องฟ้าโทนยามเย็น (ด่านรวม)
+  scene.fog = new THREE.Fog(L.fog, 70, 200);
+
+  camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 400);
+  camera.position.set(0, 12, 16);
+
+  renderer = new THREE.WebGLRenderer({ antialias:true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  document.getElementById('scene').appendChild(renderer.domElement);
+
+  // แสง
+  scene.add(new THREE.HemisphereLight(0xFFF4D8, 0x9DBE7A, 0.95));
+  const sun = new THREE.DirectionalLight(0xFFFBEF, 1.15);
+  sun.position.set(-30, 40, 20);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(1024,1024);
+  sun.shadow.camera.left=-MAP; sun.shadow.camera.right=MAP;
+  sun.shadow.camera.top=MAP; sun.shadow.camera.bottom=-MAP;
+  scene.add(sun);
+
+  // พื้น (สีตามด่าน)
+  groundMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(MAP*2, 1, MAP*2),
+    new THREE.MeshLambertMaterial({color:L.ground})
+  );
+  groundMesh.position.y = -0.5; groundMesh.receiveShadow = true;
+  scene.add(groundMesh);
+
+  // ดวงอาทิตย์กลางวันสูงบนฟ้า
+  const sunball = new THREE.Mesh(
+    new THREE.SphereGeometry(7, 16, 16),
+    new THREE.MeshBasicMaterial({color:0xFFF1A8})
+  );
+  sunball.position.set(-30, 70, -70);
+  scene.add(sunball);
+
+  buildAmbientDust();           // อนุภาคบรรยากาศลอย (ละออง/ฝุ่นแสง)
+  buildClouds();                // เมฆ voxel ลอยบนฟ้า
+  buildEnvironment();
+  buildPlayer();
+  clock = new THREE.Clock();
+}
+
+/* อนุภาคบรรยากาศ: จุดเล็กๆ ลอยทั่วฉาก (ละอองน้ำ/ฝุ่นในแสงยามเย็น) */
+let dustPoints = null;
+function buildAmbientDust(){
+  const N = 140;
+  const pos = new Float32Array(N*3);
+  for(let i=0;i<N;i++){
+    pos[i*3]   = rand(-MAP, MAP);
+    pos[i*3+1] = rand(1, 22);
+    pos[i*3+2] = rand(-MAP, MAP);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  const mat = new THREE.PointsMaterial({ color:0xffffff, size:0.35, transparent:true, opacity:0.55, depthWrite:false });
+  dustPoints = new THREE.Points(geo, mat);
+  scene.add(dustPoints);
+}
+
+/* เมฆ voxel แนวขอบฟ้า: กล้องเกมกดมองลงตลอด (ขอบบนภาพต่ำกว่าระดับสายตา)
+   เมฆจึงต้องอยู่วงแหวนรอบนอกแมป ระดับต่ำ + ปิด fog ให้ขาวชัด → เห็นในแถบฟ้าทุกมุมกล้อง */
+let clouds = [];
+function buildClouds(){
+  for(let i=0;i<8;i++){
+    const g = new THREE.Group();
+    const mat = new THREE.MeshLambertMaterial({ color:0xFFFFFF, transparent:true, opacity:0.85, fog:false });
+    const nBlobs = 3 + (Math.random()*3|0);
+    for(let b=0;b<nBlobs;b++){
+      const m = new THREE.Mesh(new THREE.BoxGeometry(rand(6,12), rand(2.5,4.5), rand(5,9)), mat);
+      m.position.set(rand(-9,9), rand(0,2), rand(-4,4));
+      g.add(m);
+    }
+    const a = (i/8)*Math.PI*2 + rand(-0.3,0.3);
+    const r = rand(130,180);
+    g.position.set(Math.sin(a)*r, rand(0,4), Math.cos(a)*r);
+    g.userData = { angle:a, radius:r, speed: rand(0.015,0.035) * (Math.random()<0.5 ? -1 : 1) };
+    scene.add(g); clouds.push(g);
+  }
+}
+function driftClouds(dt){
+  for(const c of clouds){
+    const u = c.userData;
+    u.angle += u.speed * dt;                       // ลอยเลียบขอบฟ้าช้าๆ
+    c.position.x = Math.sin(u.angle) * u.radius;
+    c.position.z = Math.cos(u.angle) * u.radius;
+  }
+}
+
+/* ตัวเลขคะแนนลอยขึ้นตรงจุดเก็บของ (แปลงพิกัดโลก → พิกัดจอ แล้ววาง div ชั่วคราว) */
+const _popV = new THREE.Vector3();
+function scorePopup(text, x, y, z, color){
+  _popV.set(x, (y == null ? 1 : y), z).project(camera);
+  if(_popV.z > 1) return;                       // จุดอยู่หลังกล้อง ไม่ต้องโชว์
+  const el = document.createElement('div');
+  el.className = 'score-pop';
+  el.textContent = text;
+  if(color) el.style.color = color;
+  el.style.left = ((_popV.x*0.5+0.5)*innerWidth)+'px';
+  el.style.top  = ((-_popV.y*0.5+0.5)*innerHeight)+'px';
+  document.body.appendChild(el);
+  setTimeout(()=> el.remove(), 1000);
+}
+
+/* ============================================================
+   ฉากเฉพาะด่าน (เหมือนสถานที่จริง) · ห่อใน envGroup เพื่อล้างตอนเปลี่ยนด่าน
+   anim[] = ส่วนที่ขยับ (ค้างคาว/น้ำตก/ผีเสื้อ/ละออง) อัปเดตใน animateEnv()
+   ============================================================ */
+let envAnim = [];               // รายการวัตถุที่ต้องแอนิเมตในฉาก
+
+/* 3 ด่านแยก: วาดฉากทีละสถานที่ตาม currentStageIdx */
+function buildEnvironment(){
+  if(envGroup){ scene.remove(envGroup); }
+  const root = new THREE.Group();
+  envAnim = [];
+  const zk = getCurrentZoneKey();
+  const builders = { khao:buildKhaoChakan, pangsida:buildPangSida, prasat:buildPrasat };
+  const sub = new THREE.Group();
+  envGroup = sub;
+  builders[zk]();
+  const SUB_SCALE = 0.72;
+  sub.scale.setScalar(SUB_SCALE);
+  const back = MAP * SUB_SCALE;
+  sub.rotation.y = 0;
+  sub.position.set(0, 0, back);
+  sub.userData.zone = zk;
+  root.add(sub);
+  buildStagePerimeter(root);
+  envGroup = root;
+  scene.add(envGroup);
+}
+
+/* ลานกลาง + รั้วขอบ + ป้ายชื่อด่าน (ฉากเดียวต่อด่าน) */
+function buildStagePerimeter(root){
+  const plaza = box(12, 0.4, 12, 0xD8CDB0);
+  plaza.position.set(0, 0.05, 0); plaza.receiveShadow = true; root.add(plaza);
+  const R = MAP-3, postEvery = 10;
+  for(let s=-MAP+3; s<=MAP-3; s+=postEvery){
+    [[s,R],[s,-R],[R,s],[-R,s]].forEach(([x,z])=>{
+      const post = box(1, rand(3,4.5), 1, pick([0x9A8A66,0xA89770,0x8C7C5C]));
+      post.position.set(x, post.geometry.parameters.height/2, z); post.castShadow=true; root.add(post);
+    });
+  }
+  const Z = ZONES[getCurrentZoneKey()];
+  const sign = makeZoneSign(Z.emoji + ' ' + Z.name);
+  sign.position.set(0, 16, -8);
+  sign.userData = { kind:'sign', baseY:16, phase:rand(0,6.28) };
+  root.add(sign); envAnim.push(sign);
+}
+
+/* ป้ายข้อความลอย (billboard) จาก CanvasTexture — หันเข้ากล้องเสมอใน animateEnv */
+function makeZoneSign(text){
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 128;
+  const ctx = cv.getContext('2d');
+  // พื้นป้ายขาวนวลโทนกลางวัน + ขอบส้ม
+  ctx.fillStyle = 'rgba(255,255,255,0.95)'; roundRect(ctx,6,6,500,116,22); ctx.fill();
+  ctx.lineWidth = 6; ctx.strokeStyle = '#FF8A2B'; roundRect(ctx,6,6,500,116,22); ctx.stroke();
+  ctx.fillStyle = '#1A3A5C'; ctx.font = 'bold 56px Mitr, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, 256, 68);
+  const tex = new THREE.CanvasTexture(cv);
+  const mat = new THREE.SpriteMaterial({ map:tex, transparent:true, depthWrite:false });
+  const sp = new THREE.Sprite(mat);
+  sp.scale.set(20, 5, 1);
+  return sp;
+}
+/* helper วาดสี่เหลี่ยมมุมโค้งบน canvas 2D */
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+
+/* helper: ภูเขาหินทรงพีระมิดหยาบ (ซ้อนกล่องเล็กลงเป็นชั้น) */
+function voxelMountain(x, z, baseW, height, color){
+  const g = new THREE.Group();
+  const layers = 6;
+  for(let i=0;i<layers;i++){
+    const t = i/layers;
+    const w = baseW*(1-t*0.85) + rand(-0.6,0.6);
+    const cube = box(w, height/layers+0.6, w, i%2? color : color-0x080808);
+    cube.position.set(rand(-0.5,0.5), (height/layers)*i + 0.5, rand(-0.5,0.5));
+    g.add(cube);
+  }
+  g.position.set(x, 0, z);
+  return g;
+}
+
+/* helper: เขาหินปูนสูงชัน (ผนังเกือบตั้งฉาก สอบเข้าเล็กน้อย + ร่องตั้งคล้ายผ้าม่าน)
+   ใช้กับเขาฉกรรจ์โดยเฉพาะ — เขาจริงชันเกือบตั้งฉาก ยอดป้านมน */
+function limestoneHill(x, z, baseW, depth, height, color){
+  const g = new THREE.Group();
+  const layers = 8;
+  for(let i=0;i<layers;i++){
+    const t = i/layers;
+    const w = baseW*(1 - t*0.28);            // สอบเข้าแค่นิดเดียว → ชัน
+    const d = depth*(1 - t*0.28);
+    const seg = box(w, height/layers+0.4, d, i%2? color : color-0x070707);
+    seg.position.set(rand(-0.3,0.3), (height/layers)*i + 0.4, rand(-0.3,0.3));
+    g.add(seg);
+  }
+  // ร่องหินตั้งด้านหน้า (ลายผ้าม่าน) — แท่งเงาบางๆ พาดลงจากยอด
+  const cols = Math.max(3, Math.round(baseW/3));
+  for(let c=0;c<cols;c++){
+    const groove = box(0.5, height*0.82, 0.4, color-0x141414);
+    groove.position.set(-baseW/2 + 1.5 + c*(baseW-3)/(cols-1), height*0.42, depth/2*0.92);
+    g.add(groove);
+  }
+  // ยอดป้านมน
+  const cap = box(baseW*0.45, height*0.12, depth*0.45, color+0x060606);
+  cap.position.y = height*0.96; g.add(cap);
+  g.position.set(x, 0, z);
+  return g;
+}
+/* helper: ต้นไม้ 3 ทรง */
+function voxelTree(x, z, kind){
+  const g = new THREE.Group();
+  if(kind==='tall'){           // ไม้ยืนต้นสูง
+    const tr=box(0.7,4,0.7,0x6E4A2A); tr.position.y=2; g.add(tr);
+    for(let i=0;i<3;i++){ const lf=box(3-i*0.6,1.6,3-i*0.6,0x3FA336); lf.position.y=4+i*1.2; g.add(lf); }
+  } else if(kind==='bush'){    // พุ่มเตี้ย
+    const lf=box(2.4,1.8,2.4,0x57BD42); lf.position.y=1; g.add(lf);
+  } else {                     // dry = ไม้แห้งบนเขา
+    const tr=box(0.6,3,0.6,0x7E5E33); tr.position.y=1.5; g.add(tr);
+    const lf=box(1.8,1.4,1.8,0x9FC24E); lf.position.y=3.4; g.add(lf);
+  }
+  g.position.set(x,0,z);
+  return g;
+}
+/* helper: เนินเขาป่าชื้น (ยอดมน โทนเขียวปกคลุม) */
+function forestHill(x, z, baseW, height, rockColor, greenColor){
+  const g = new THREE.Group();
+  const layers = 7;
+  for(let i=0;i<layers;i++){
+    const t = i/layers;
+    const w = baseW * (1 - t * 0.36);
+    const col = i < 2 ? rockColor : (i < 5 ? greenColor - (i * 0x030303) : greenColor);
+    const h = height / layers + 0.35;
+    const seg = box(w, h, w * 0.88, col);
+    seg.position.set(rand(-0.25, 0.25), h * i + h * 0.5, rand(-0.25, 0.25));
+    g.add(seg);
+  }
+  const cap = box(baseW * 0.38, height * 0.12, baseW * 0.38, greenColor + 0x080808);
+  cap.position.y = height * 0.96; g.add(cap);
+  g.position.set(x, 0, z);
+  return g;
+}
+/* helper: ปลูกกระจุกต้นไม้หนาแน่น */
+function plantForestCluster(cx, cz, radius, count){
+  for(let i=0;i<count;i++){
+    const ang = rand(0, Math.PI * 2), r = rand(0, radius);
+    const x = cx + Math.cos(ang) * r, z = cz + Math.sin(ang) * r;
+    envGroup.add(voxelTree(x, z, pick(['tall', 'tall', 'tall', 'bush', 'dry'])));
+  }
+}
+/* ---------- ด่าน 2: เขาฉกรรจ์ ----------
+   เขาจริง = ภูเขาหินปูน 3 ลูกเรียงติดกัน สูงชันเกือบตั้งฉาก หน้าผาลายผ้าม่าน
+   ลูกกลาง (เขาฉกรรจ์) ใหญ่/สูงสุด · ซ้าย=เขามิ่ง · ขวา=เขาฝาละมี
+   ตีนเขามีปากถ้ำ (72 ถ้ำ) · ลิงป่า + ค้างคาวล้านตัวบินตอนเย็น */
+function buildKhaoChakan(){
+  const rock = 0xC9C2B4;
+  const zBack = -MAP+18;
+  // 3 ลูกเรียงติดกัน (ติดกันจริง — วาง x ชิด ฐานเหลื่อมซ้อน)
+  const ming    = limestoneHill(-22, zBack+2, 18, 14, 30, 0xC6BFB0);  // ซ้าย เขามิ่ง
+  const chakan  = limestoneHill(  0, zBack,   24, 17, 42, rock);       // กลาง เขาฉกรรจ์ (ใหญ่/สูงสุด)
+  const falami  = limestoneHill( 21, zBack+2, 17, 14, 28, 0xCAC3B4);  // ขวา เขาฝาละมี
+  envGroup.add(ming); envGroup.add(chakan); envGroup.add(falami);
+  // ปากถ้ำดำที่ตีนเขากลาง
+  const caveMouth = box(6, 7, 3, 0x241C14); caveMouth.position.set(0, 3.5, zBack+8);
+  envGroup.add(caveMouth);
+  // ปากถ้ำเล็กที่ลูกข้าง (สื่อ "72 ถ้ำ")
+  [[-22,zBack+9],[21,zBack+9]].forEach(([cx,cz])=>{
+    const c=box(3,4,2,0x2A2018); c.position.set(cx,2,cz); envGroup.add(c);
+  });
+  // กองหินตีนเขา — กระจุกแถบ landmark
+  for(let i=0;i<32;i++){
+    const x=rand(-42,42), z=rand(-MAP+6,-MAP+52);
+    const s=rand(1.2,3.8); const r=box(s,s*0.8,s,pick([0xBDB6A6,0xC9C2B4,0x8F8473,0xA89E8A]));
+    r.position.set(x,s*0.4,z); r.rotation.y=rand(0,1.2); envGroup.add(r);
+  }
+  // เนินเขารอง 2 ลูก (ฉากหลังซ้าย-ขวา)
+  envGroup.add(limestoneHill(-38, zBack+14, 14, 11, 20, 0xB8B1A2));
+  envGroup.add(limestoneHill( 38, zBack+12, 13, 10, 18, 0xBEB7A8));
+  // ป่าแล้ง + พุ่มไม้ตีนเขา (หนาแน่นขึ้น)
+  for(let i=0;i<38;i++){
+    const x=rand(-44,44), z=rand(-MAP+8,-MAP+58);
+    envGroup.add(voxelTree(x,z, pick(['dry','dry','bush','bush'])));
+  }
+  plantForestCluster(-30, zBack+22, 10, 8);
+  plantForestCluster( 30, zBack+20, 10, 8);
+  plantForestCluster(  0, zBack+28, 14, 10);
+  // ก้อนหิน + ต้นไม้กระจายทั่วลานเล่น (ครูสั่ง 16 ก.ค. — เดิมของแต่งกระจุกครึ่งหลังฝั่งภูเขา ครึ่งหน้าที่เดินจริงโล่ง)
+  // ใช้กรอบ local เดียวกับปางสีดา: envGroup ถูก scale 0.72 + เลื่อน z → ต้องแปลงพิกัดก่อนสุ่ม
+  {
+    const SC = 0.72, OFFZ = MAP * SC, SAFE = MAP - 5;
+    const LX = SAFE / SC, LZ_MIN = (-SAFE - OFFZ) / SC, LZ_MAX = (SAFE - OFFZ) / SC;
+    const nearSpawn = (x, z) => Math.hypot(x*SC, z*SC + OFFZ) < 13;   // เว้นลานกลาง/จุดเกิดผู้เล่น
+    for(let i=0;i<26;i++){            // ก้อนหินกระจายทั่วด่าน
+      const x = rand(-LX, LX), z = rand(LZ_MIN, LZ_MAX);
+      if(nearSpawn(x, z)) continue;
+      const s = rand(1, 3.2); const r = box(s, s*0.8, s, pick([0xBDB6A6,0xC9C2B4,0x8F8473,0xA89E8A]));
+      r.position.set(x, s*0.4, z); r.rotation.y = rand(0, 1.2); envGroup.add(r);
+    }
+    for(let i=0;i<30;i++){            // ต้นไม้แล้ง/พุ่ม/ไม้สูงรอบ ๆ
+      const x = rand(-LX, LX), z = rand(LZ_MIN, LZ_MAX);
+      if(nearSpawn(x, z)) continue;
+      envGroup.add(voxelTree(x, z, pick(['dry','dry','tall','bush','bush'])));
+    }
+  }
+  // ฝูงค้างคาวบินวนเหนือ 3 ยอดเขา (แอนิเมต)
+  const peaks=[[-22,zBack+2,30],[0,zBack,42],[21,zBack+2,28]];
+  for(let i=0;i<14;i++){
+    const [cx,cz,py]=peaks[i%3];
+    const bat = new THREE.Group();
+    const body=box(0.4,0.4,0.4,0x3A2E22); bat.add(body);
+    const wl=box(0.9,0.1,0.5,0x463726); wl.position.x=-0.6; bat.add(wl);
+    const wr=box(0.9,0.1,0.5,0x463726); wr.position.x=0.6; bat.add(wr);
+    bat.userData={ kind:'bat', a:Math.random()*6.28, r:rand(5,12), spd:rand(0.4,0.9), cx, cz, y:py-rand(2,8), wl, wr };
+    envGroup.add(bat); envAnim.push(bat);
+  }
+}
+
+/* ---------- ด่าน 1: น้ำตกปางสีดา (น้ำตกมุม + หลายชั้น + ป่าทึบ + ผีเสื้อ) ---------- */
+function buildPangSida(){
+  /* ปางสีดา: น้ำตกหลายชั้น + ลำธารไหลผ่าน + ป่ากระจายเต็มพื้นที่ (ไม่กระจุก ไม่ยื่นนอกขอบ)
+     หมายเหตุพิกัด: envGroup ถูก scale 0.72 และเลื่อน +z(MAP*0.72) ใน buildEnvironment
+     → ตำแหน่ง local ต้องอยู่ในกรอบที่หลัง transform แล้วยังอยู่ในแมป [-MAP,MAP] */
+  const SC = 0.72, OFFZ = MAP * SC;          // ค่าเดียวกับ buildEnvironment
+  const SAFE = MAP - 4;                      // ขอบปลอดภัย (world) กันยื่นเลยรั้ว
+  // ช่วง local ที่ปลอดภัย: world = local*SC (+OFFZ ในแกน z)
+  const LX = SAFE / SC;                      // |local x| ไม่เกินนี้  ≈ 66.7
+  const LZ_MIN = (-SAFE - OFFZ) / SC;        // local z ต่ำสุด        ≈ -120
+  const LZ_MAX = ( SAFE - OFFZ) / SC;        // local z สูงสุด        ≈ 16.7
+  const clampX = v => Math.max(-LX, Math.min(LX, v));
+  const clampZ = v => Math.max(LZ_MIN, Math.min(LZ_MAX, v));
+  // สุ่มจุดในกรอบปลอดภัย (พร้อม margin กันขอบวัตถุล้น)
+  const randX = (m=0) => rand(-LX + m, LX - m);
+  const randZ = (m=0) => rand(LZ_MIN + m, LZ_MAX - m);
+
+  const rockDark = 0x3D4F3A;     // หินเข้ม (เงา)
+  const rockMid  = 0x5C6E52;     // หินกลาง
+  const rockLit  = 0x8A9A72;     // หินโดนแสง
+  const rockWet  = 0x4A6358;     // หินเปียกน้ำ
+  const moss     = 0x2F6B34;     // มอสเขียว
+  const lichen   = 0x7A9A4A;     // รา/ตะไค
+  const waterFoam= 0xF0FDFF;     // ฟองขาว
+  const waterLite= 0xA5F3FC;     // น้ำตื้น
+  const waterMid = 0x38BDF8;     // น้ำไหล
+  const waterDeep= 0x0284C7;     // น้ำลึก
+  const waterPool= 0x0C4A6E;     // แอ่งลึก
+
+  // น้ำตกวางมุมซ้าย-หลังสุด (z ต่ำสุด) ให้ลำธารไหลทแยงข้ามมาทั้งแมป
+  const cx = -LX + 26;
+  const cz = LZ_MIN + 16;
+
+  // หน้าผาหลัก + ปีกหินสร้างมุม (L-shape)
+  const cliffMain = box(26, 34, 9, rockDark);
+  cliffMain.position.set(cx, 17, cz); envGroup.add(cliffMain);
+  const cliffWing = box(9, 28, 24, rockMid);
+  cliffWing.position.set(cx + 15, 14, cz + 10); envGroup.add(cliffWing);
+  // แผ่นหน้าผาเอียงให้รู้สึกมีมิติ
+  const cliffFace = box(3, 30, 7, rockLit);
+  cliffFace.position.set(cx + 11, 15, cz + 2); cliffFace.rotation.y = 0.18; envGroup.add(cliffFace);
+  const cliffFace2 = box(2.5, 22, 5, rockWet);
+  cliffFace2.position.set(cx + 4, 12, cz + 5); cliffFace2.rotation.y = -0.12; envGroup.add(cliffFace2);
+  // มอส/ราติดหน้าผา
+  for(let i=0;i<9;i++){
+    const patch = box(rand(2,5), rand(0.8,2.2), rand(2,4), pick([moss, lichen, rockWet]));
+    patch.position.set(cx + rand(2,14), rand(6,28), cz + rand(-1,8));
+    patch.rotation.y = rand(-0.4, 0.4);
+    envGroup.add(patch);
+  }
+
+  // ขั้นบันไดหิน 3 ชั้น (น้ำตกแคสเคด)
+  const tiers = [
+    { x:cx+3,  y:30, z:cz+4,  w:11, fallH:7 },
+    { x:cx+6,  y:22, z:cz+8,  w:9,  fallH:6 },
+    { x:cx+9,  y:15, z:cz+12, w:7,  fallH:5 },
+  ];
+  // ไล่สีตามชั้น: ชั้นบนสุด(ti=0)อ่อนสุด → ชั้นล่างสุด(ti=2)เข้มสุด เพิ่มความไล่ระดับของทั้งน้ำตก
+  const tierColSets = [
+    [waterFoam, waterLite, waterMid],
+    [waterLite, waterMid,  waterMid],
+    [waterMid,  waterMid,  waterDeep],
+  ];
+  tiers.forEach((tier, ti)=>{
+    const ledge = box(tier.w, 1.6, 4.5, rockWet);
+    ledge.position.set(tier.x, tier.y, tier.z); envGroup.add(ledge);
+    const lip = box(tier.w + 0.6, 0.5, 1.2, rockLit);
+    lip.position.set(tier.x, tier.y + 0.9, tier.z + 2.4); envGroup.add(lip);
+    // แถบน้ำ 3 สีต่อชั้น (ไล่ตามชั้น: บนอ่อน–ล่างเข้ม)
+    tierColSets[ti].forEach((col, j)=>{
+      const fall = box(1.1 + j*0.25, tier.fallH, 0.55, col);
+      fall.material.transparent = true;
+      fall.material.opacity = 0.78 + j*0.07;
+      const fx = tier.x + (j - 1) * 2.2;
+      fall.position.set(fx, tier.y - tier.fallH * 0.5, tier.z + 2.6);
+      fall.userData = { kind:'fall', baseY: tier.y - tier.fallH * 0.5, off: ti * 2 + j, sway: fx };
+      envGroup.add(fall); envAnim.push(fall);
+    });
+  });
+
+  // น้ำตกหลักตกจากยอด — แบ่งเป็น 4 ช่วงไล่สีแนวตั้ง (ฟองขาวบนสุด → น้ำลึกล่างสุด) แทนแท่งสีเดียวตลอดสาย
+  const mainFallGrad = [
+    { col: waterFoam, h: 9, op: 0.85 },
+    { col: waterLite, h: 9, op: 0.78 },
+    { col: waterMid,  h: 6, op: 0.74 },
+    { col: waterDeep, h: 4, op: 0.70 },
+  ];
+  for(let i=0;i<6;i++){
+    const fx = cx + 5 + i * 1.1;
+    const fw = rand(1.0, 1.7);
+    let topY = 28;
+    mainFallGrad.forEach((seg, gi)=>{
+      const fall = box(fw, seg.h, 0.55, seg.col);
+      fall.material.transparent = true;
+      fall.material.opacity = seg.op;
+      const fy = topY - seg.h * 0.5;
+      fall.position.set(fx, fy, cz + 3.5);
+      fall.userData = { kind:'fall', baseY: fy, off: i * 1.3 + gi * 0.6, sway: fx };
+      envGroup.add(fall); envAnim.push(fall);
+      topY -= seg.h;
+    });
+  }
+
+  // แอ่งน้ำล่าง — 3 ชั้นสี (ลึก → ตื้น → แสงสะท้อน)
+  const poolBase = box(18, 0.55, 13, waterDeep);
+  poolBase.material.transparent = true; poolBase.material.opacity = 0.88;
+  poolBase.position.set(cx + 10, 0.38, cz + 18); envGroup.add(poolBase);
+  const poolMid = box(13, 0.35, 9, waterPool);
+  poolMid.material.transparent = true; poolMid.material.opacity = 0.72;
+  poolMid.position.set(cx + 10, 0.48, cz + 18); envGroup.add(poolMid);
+  const poolShine = box(7, 0.12, 4.5, waterFoam);
+  poolShine.material.transparent = true; poolShine.material.opacity = 0.5;
+  poolShine.position.set(cx + 9, 0.62, cz + 17); envGroup.add(poolShine);
+  // ฟองกระเซ็นริมแอ่ง
+  for(let i=0;i<10;i++){
+    const sp = box(rand(0.6,1.4), rand(0.25,0.7), rand(0.6,1.4), pick([waterFoam, waterLite]));
+    sp.material.transparent = true; sp.material.opacity = rand(0.45, 0.75);
+    sp.position.set(cx + rand(4, 17), rand(0.5, 1.1), cz + rand(14, 22));
+    sp.userData = { kind:'splash', off: Math.random() * 6 };
+    envGroup.add(sp); envAnim.push(sp);
+  }
+  // หินเปียกล้อมแอ่ง
+  for(let i=0;i<12;i++){
+    const x = cx + rand(2, 18), z = cz + rand(11, 23);
+    const s = rand(1.2, 3.2);
+    const r = box(s, s * 0.65, s, pick([rockWet, rockMid, moss]));
+    r.position.set(clampX(x), s * 0.32, clampZ(z)); r.rotation.y = rand(0, 1.2); envGroup.add(r);
+  }
+
+  /* ลำธารไหลผ่าน — ไหลจากแอ่งน้ำตกคดเคี้ยวทแยงข้ามทั้งแมป (เหมือนปางสีดาจริง)
+     จุดสุดท้ายอยู่ในกรอบปลอดภัย ไม่ทะลุขอบหน้า */
+  const streamPts = [
+    { x:cx + 10, z:cz + 22 },              // ปากลำธารใต้แอ่ง (หลัง)
+    { x:cx + 22, z:(LZ_MIN+LZ_MAX)*0.35 },
+    { x:cx + 6,  z:(LZ_MIN+LZ_MAX)*0.55 },
+    { x:cx + 28, z:(LZ_MIN+LZ_MAX)*0.78 },
+    { x:clampX(cx + 40), z:LZ_MAX - 4 },   // ไหลออกด้านหน้า (ยังในกรอบ)
+  ];
+  for(let i=0; i<streamPts.length-1; i++){
+    const a = streamPts[i], bpt = streamPts[i+1];
+    const segLen = Math.hypot(bpt.x-a.x, bpt.z-a.z);
+    const ang = Math.atan2(bpt.x-a.x, bpt.z-a.z);
+    const steps = Math.max(2, Math.round(segLen / 3));
+    for(let s=0; s<steps; s++){
+      const tt = s / steps;
+      const mx2 = a.x + (bpt.x-a.x) * tt;
+      const mz2 = a.z + (bpt.z-a.z) * tt;
+      // ท้องน้ำ 2 ชั้น (ลึก/ผิว) เป็นแผ่นเตี้ยติดพื้น
+      const bed = box(5.2, 0.3, 3.6, waterDeep);
+      bed.material.transparent = true; bed.material.opacity = 0.82;
+      bed.position.set(mx2, 0.32, mz2); bed.rotation.y = ang; envGroup.add(bed);
+      const surf = box(4.0, 0.16, 2.4, pick([waterMid, waterLite]));
+      surf.material.transparent = true; surf.material.opacity = 0.7;
+      surf.position.set(mx2, 0.45, mz2); surf.rotation.y = ang;
+      surf.userData = { kind:'fall', off: (i*steps + s) * 0.8, sway: null }; // ระยิบผิวน้ำ
+      envGroup.add(surf); envAnim.push(surf);
+      // ฟองขาวตรงโค้ง/ทุกๆ ปล้อง
+      if(s % 2 === 0){
+        const foam = box(rand(0.7,1.4), 0.2, rand(0.7,1.4), waterFoam);
+        foam.material.transparent = true; foam.material.opacity = 0.6;
+        foam.position.set(mx2 + rand(-1.2,1.2), 0.55, mz2 + rand(-1,1));
+        foam.userData = { kind:'splash', off: Math.random()*6 };
+        envGroup.add(foam); envAnim.push(foam);
+      }
+      // โขดหินริมธารสองฝั่ง
+      if(s % 2 === 0){
+        [-1,1].forEach(side=>{
+          const rs = rand(1.0, 2.4);
+          const rk = box(rs, rs*0.7, rs, pick([rockWet, rockMid, moss, rockLit]));
+          rk.position.set(clampX(mx2 + Math.cos(ang)*side*3.4), rs*0.32, clampZ(mz2 - Math.sin(ang)*side*3.4));
+          rk.rotation.y = rand(0,1.2); envGroup.add(rk);
+        });
+      }
+    }
+  }
+
+  // ระยะตั้งฉากจาก (x,z) ถึงเส้นลำธาร (เว้นไม่ให้ต้นไม้/เขางอกกลางน้ำ)
+  const nearStream = (x, z) => {
+    for(let i=0;i<streamPts.length-1;i++){
+      const a = streamPts[i], bpt = streamPts[i+1];
+      const vx = bpt.x-a.x, vz = bpt.z-a.z, L2 = vx*vx+vz*vz || 1;
+      let tt = ((x-a.x)*vx + (z-a.z)*vz) / L2; tt = Math.max(0, Math.min(1, tt));
+      const px2 = a.x + vx*tt, pz2 = a.z + vz*tt;
+      if(Math.hypot(x-px2, z-pz2) < 4.5) return true;
+    }
+    return false;
+  };
+  // ใกล้น้ำตก/แอ่ง (เลี่ยงวางของทับ)
+  const nearWaterfall = (x, z) => (x > cx - 10 && x < cx + 34 && z > cz - 8 && z < cz + 30);
+
+  // เขาป่าชื้น — กระจายทั้ง 4 มุม/ขอบ (สร้างมิติรอบด้าน ไม่กระจุกหลัง)
+  const hillRock = 0x5A6B50, hillGreen = 0x3D8F3A;
+  const hillSpots = [
+    [ LX-16, LZ_MIN+14, 24, 22], [ LX-10, LZ_MAX-16, 18, 16],
+    [-LX+18, LZ_MAX-12, 20, 18], [ 6,     LZ_MIN+10, 22, 20],
+    [-LX+14, (LZ_MIN+LZ_MAX)/2, 16, 14], [ LX-14, (LZ_MIN+LZ_MAX)*0.4, 17, 15],
+  ];
+  hillSpots.forEach(([hx,hz,hw,hh],k)=>{
+    if(nearStream(hx,hz) || nearWaterfall(hx,hz)) return;
+    const tint = k%2 ? 0x060606 : 0;
+    envGroup.add(forestHill(clampX(hx), clampZ(hz), hw, hh, hillRock-tint, hillGreen+tint));
+    for(let i=0;i<4;i++) envGroup.add(voxelTree(clampX(hx+rand(-5,5)), clampZ(hz+rand(-4,4)), 'tall'));
+  });
+
+  // กระจุกป่าหนาแน่นกระจายทั่วแมป (รวมครึ่งหน้า)
+  const clusters = [
+    [ LX-20, LZ_MIN+24], [-LX+22, LZ_MIN+30], [ LX-18, LZ_MAX-22],
+    [-LX+20, LZ_MAX-18], [ 0, (LZ_MIN+LZ_MAX)/2 + 6], [ 16, LZ_MAX-10], [-18, LZ_MAX-12],
+  ];
+  clusters.forEach(([cxx,czz])=>{
+    if(nearStream(cxx,czz) || nearWaterfall(cxx,czz)) return;
+    plantForestCluster(clampX(cxx), clampZ(czz), rand(10,15), rand(9,13));
+  });
+
+  // ต้นไม้กระจายทั่วทั้งแมป (เต็มกรอบปลอดภัย) — เว้นน้ำตก/ลำธาร/ลานกลาง
+  const centerWorld = OFFZ;  // ลานกลาง(world 0,0) = local (0, -OFFZ/SC)
+  const plazaLocalZ = -OFFZ / SC;
+  for(let i=0;i<80;i++){
+    const x = randX(2), z = randZ(2);
+    if(nearWaterfall(x,z) || nearStream(x,z)) continue;
+    // เว้นลานกลางผู้เล่นเริ่ม (world ~ origin)
+    if(Math.hypot(x*SC, z*SC + OFFZ) < 14) continue;
+    envGroup.add(voxelTree(x, z, pick(['tall','tall','tall','bush','dry'])));
+  }
+
+  // ผีเสื้อลอยกระจายทั่ว (แอนิเมต) — บินวนทั่วแมป ไม่กระจุก
+  for(let i=0;i<14;i++){
+    const bf = new THREE.Group();
+    const wl = box(0.7, 0.06, 0.9, pick([0xFF7AB0, 0xFF8A2B, 0xA76FE0]));
+    wl.position.x = -0.4; bf.add(wl);
+    const wr = box(0.7, 0.06, 0.9, pick([0xFF7AB0, 0xFF8A2B, 0xA76FE0]));
+    wr.position.x = 0.4; bf.add(wr);
+    bf.userData = { kind:'bf', a:Math.random() * 6.28, r:rand(6, 18), spd:rand(0.3, 0.7),
+      cx:clampX(randX(20)), cz:clampZ(randZ(20)), y:rand(2, 6), wl, wr };
+    envGroup.add(bf); envAnim.push(bf);
+  }
+}
+
+/* ซุ้มประตูโค้ง (ทางเข้าปราสาท) — เสา 2 ข้าง + แถบบล็อกเรียงเป็นครึ่งวงกลมด้านบน (ทรงโค้งจริง แทนกล่องสี่เหลี่ยมเดิม) */
+function buildArchDoor(width, pillarH, colorPillar, colorCap){
+  const g = new THREE.Group();
+  const halfW = width/2;
+  const pillarL = box(0.9, pillarH, 0.9, colorPillar); pillarL.position.set(-halfW, pillarH/2, 0); g.add(pillarL);
+  const pillarR = box(0.9, pillarH, 0.9, colorPillar); pillarR.position.set( halfW, pillarH/2, 0); g.add(pillarR);
+  const capL = box(1.2,0.5,1.2,colorCap); capL.position.set(-halfW, pillarH, 0); g.add(capL);
+  const capR = box(1.2,0.5,1.2,colorCap); capR.position.set( halfW, pillarH, 0); g.add(capR);
+  const archR = halfW + 0.2, segs = 7;
+  for(let i=0;i<=segs;i++){
+    const ang = Math.PI * (i/segs);   // 0..PI ครึ่งวงกลมจากเสาซ้ายไปเสาขวา
+    const bx = -Math.cos(ang) * archR;
+    const by = pillarH + 0.5 + Math.sin(ang) * archR;
+    const blk = box(1.1,1.1,0.9, i%2 ? colorPillar : colorCap);
+    blk.position.set(bx, by, 0);
+    g.add(blk);
+  }
+  return g;
+}
+
+/* ---------- ด่าน 3: ปราสาทสด๊กก๊อกธม (ปรางค์หินทราย + เสา + กำแพง + สระน้ำ) ---------- */
+function buildPrasat(){
+  const sand=0xE0C896, dark=0x9C8463;
+  // ปราสาทประธานทรงพุ่ม (ปรางค์) กลางขอบหลัง
+  const prang = new THREE.Group();
+  const base = box(10,4,10,sand); base.position.y=2; prang.add(base);
+  const mid  = box(7,5,7,dark);   mid.position.y=6.5; prang.add(mid);
+  for(let i=0;i<4;i++){ const tier=box(5-i*0.9,2,5-i*0.9, i%2?sand:dark); tier.position.y=10+i*1.8; prang.add(tier); }
+  const top  = box(1.4,3,1.4,0xD4B36A); top.position.y=18; prang.add(top);   // ยอดปรางค์
+  // ซุ้มประตูโค้ง
+  const archDoor = buildArchDoor(2.6, 3.2, dark, sand);
+  archDoor.position.set(0,0,5.2); prang.add(archDoor);
+  prang.position.set(0,0,-MAP+18); envGroup.add(prang);
+
+  // สระน้ำหน้าปราสาท — เยื้องข้างทางเดิน (ไม่ขวางแนวเดินตรงจากซุ้มประตูไปทางเดินเสาหิน) โทนน้ำเดียวกับน้ำตกปางสีดา
+  {
+    const waterFoam=0xF0FDFF, waterMid=0x38BDF8, waterPool=0x0C4A6E;
+    const pondCX=-15, pondCZ=-MAP+26;  // เยื้องซ้าย + ขยับใกล้ทางเดินเล็กน้อยกันชนบรรณาลัย/เสาทางเดิน
+    const pondBase = box(9,0.5,6,waterPool); pondBase.position.set(pondCX,0.25,pondCZ); envGroup.add(pondBase);
+    const pondMid  = box(6.5,0.3,4,waterMid);   pondMid.position.set(pondCX,0.4,pondCZ);   envGroup.add(pondMid);
+    const pondShine= box(3,0.12,2,waterFoam); pondShine.position.set(pondCX,0.56,pondCZ);envGroup.add(pondShine);
+    // ขอบสระหินทราย
+    for(let a=0;a<6.28;a+=0.45){
+      const ex = Math.cos(a)*5.1, ez = Math.sin(a)*3.6;
+      const edge = box(1.1,0.55,1.1, a%0.9<0.45?sand:dark);
+      edge.position.set(pondCX+ex, 0.28, pondCZ+ez); envGroup.add(edge);
+    }
+  }
+  // บรรณาลัย 2 หลังขนาบ
+  [-14,14].forEach(x=>{
+    const lib=new THREE.Group();
+    const b=box(6,5,6,sand); b.position.y=2.5; lib.add(b);
+    const rf=box(6.4,2,6.4,dark); rf.position.y=6; lib.add(rf);
+    lib.position.set(x,0,-MAP+20); envGroup.add(lib);
+  });
+  // กำแพงแก้วล้อม (แท่งเรียง บางช่วงหัก)
+  const ringR=34;
+  for(let a=0;a<6.28;a+=0.22){
+    if(Math.random()<0.18) continue;           // เว้นช่วงให้ดูหักพัง
+    const x=Math.cos(a)*ringR, z=Math.sin(a)*ringR - 6;
+    if(z>MAP-6) continue;
+    const h=rand(2.5,4); const w=box(2,h,1.4, a%0.5<0.25?sand:dark);
+    w.position.set(x,h/2,z); w.rotation.y=a; envGroup.add(w);
+  }
+  // เสาหินเรียงเป็นทางเดินเข้าปราสาท
+  for(let i=0;i<6;i++){
+    [-5,5].forEach(side=>{
+      const col=box(1.6, rand(5,7), 1.6, sand);
+      col.position.set(side, col.geometry.parameters.height/2, -MAP+30+i*7);
+      // หัวเสา
+      const cap=box(2.2,1,2.2,dark); cap.position.set(side, col.geometry.parameters.height, -MAP+30+i*7);
+      envGroup.add(col); envGroup.add(cap);
+    });
+  }
+  // แท่งกำแพง/หินหักกระจาย — กระจุกแถบ landmark (z ลึก) ไม่ฟุ้งทั้งแมป
+  for(let i=0;i<14;i++){
+    const x=rand(-40,40), z=rand(-MAP+24,-MAP+58);
+    const h=rand(1,2.5); const r=box(rand(1.5,2.5),h,rand(1.5,2.5), pick([sand,dark,0xCBB484]));
+    r.position.set(x,h/2,z); r.rotation.y=rand(0,1); envGroup.add(r);
+  }
+  // ต้นไม้ประปรายรอบปราสาท (เพิ่มจำนวน+ผสมทรงสูง/พุ่มเตี้ยให้หนาแน่นสมจริงขึ้น)
+  for(let i=0;i<22;i++){
+    const x=rand(-42,42), z=rand(-MAP+12,-MAP+55);
+    envGroup.add(voxelTree(x,z, Math.random()<0.65?'tall':'bush'));
+  }
+}
+
+/* แอนิเมตองค์ประกอบในฉาก (ค้างคาว/ผีเสื้อบินวน · น้ำตกไหล · ละอองลอย) */
+function animateEnv(dt){
+  const t = performance.now()*0.001;
+  // ละอองบรรยากาศลอยขึ้นช้าๆ วนลูป
+  if(dustPoints){
+    const p = dustPoints.geometry.attributes.position;
+    for(let i=0;i<p.count;i++){
+      let y = p.getY(i) + dt*0.6;
+      if(y > 23) y = 1;
+      p.setY(i, y);
+    }
+    p.needsUpdate = true;
+  }
+  for(const o of envAnim){
+    const d = o.userData;
+    if(d.kind==='bat' || d.kind==='bf'){
+      d.a += d.spd*dt;
+      o.position.set(d.cx + Math.cos(d.a)*d.r, d.y + Math.sin(d.a*2)*1.5, d.cz + Math.sin(d.a)*d.r);
+      o.rotation.y = -d.a;
+      const flap = Math.sin(t*(d.kind==='bat'?14:9)+d.a)* (d.kind==='bat'?0.9:0.7);
+      d.wl.rotation.z = flap; d.wr.rotation.z = -flap;
+    } else if(d.kind==='fall'){
+      d.off = (d.off + dt * 9) % 6;
+      o.material.opacity = 0.68 + Math.sin(t * 7 + d.off) * 0.14;
+      if(d.sway != null) o.position.x = d.sway + Math.sin(t * 2.5 + d.off) * 0.12;
+    } else if(d.kind==='splash'){
+      o.position.y = 0.55 + Math.abs(Math.sin(t * 4 + d.off)) * 0.55;
+      o.material.opacity = 0.4 + Math.sin(t * 5 + d.off) * 0.25;
+    } else if(d.kind==='sign'){
+      // ป้ายชื่อโซนลอยขึ้นลงนุ่มๆ (Sprite หันเข้ากล้องเองอยู่แล้ว)
+      o.position.y = d.baseY + Math.sin(t*1.5 + d.phase)*0.8;
+    }
+  }
+}
+
+/* ตั้งธีมฉากตามด่านปัจจุบัน + สร้างฉากใหม่ */
+function applyLevelTheme(){
+  const L = ZONES[getCurrentZoneKey()];
+  scene.background = new THREE.Color(L.sky);
+  scene.fog.color.setHex(L.fog);
+  groundMesh.material.color.setHex(L.ground);
+  if(dustPoints) dustPoints.material.color.setHex(0xffffff);
+  buildEnvironment();
+}
+
+/* ผม voxel ตามทรงที่เลือก (เฟส 2) — คืน Group วางบนหัว (y≈3.85)
+   short=ผมสั้นคลุม · crop=รองทรงบางเตียน · pony=หางม้าด้านหลัง · cap=หมวกแก๊ป */
+function buildHair(style, hairColor){
+  const g = new THREE.Group();
+  if(style === 'cap'){
+    // หมวกแก๊ป: ครอบหัว + ปีกหน้า (สีใช้สีผมเป็นสีหมวก)
+    const crown = box(1.2, 0.5, 1.2, hairColor); crown.position.y = 3.95; g.add(crown);
+    const brim  = box(1.1, 0.18, 0.7, hairColor); brim.position.set(0, 3.78, 0.85); g.add(brim);
+  } else if(style === 'crop'){
+    // รองทรง: บางเตียน
+    const top = box(1.16, 0.26, 1.16, hairColor); top.position.y = 3.82; g.add(top);
+  } else if(style === 'pony'){
+    // หางม้า: ผมคลุม + มัดยื่นด้านหลัง
+    const top = box(1.16, 0.4, 1.16, hairColor); top.position.y = 3.85; g.add(top);
+    const tail = box(0.4, 1.1, 0.4, hairColor); tail.position.set(0, 3.4, -0.78); g.add(tail);
+  } else {
+    // short (default): ผมสั้นคลุมรอบ
+    const top = box(1.16, 0.4, 1.16, hairColor); top.position.y = 3.85; g.add(top);
+    const back = box(1.16, 0.5, 0.25, hairColor); back.position.set(0, 3.45, -0.62); g.add(back);
+  }
+  return g;
+}
+
+/* ตัวละครผู้เล่น: หัว ลำตัว แขน-ขา (แกว่งได้) — สี/ทรง/เพศ จาก avatar state (เฟส 2)
+   หมายเหตุ: body ต้องเป็น children[0] เสมอ (เทสต์/โค้ดอื่นอ้างอิงสีเสื้อจาก children[0]) */
+function buildPlayer(){
+  player = new THREE.Group();
+  const skin  = 0xF2C49B;
+  const shirt = SHIRT_COLORS[avatar.shirt].color;
+  const pants = PANTS_COLORS[avatar.pants].color;
+  const hairCol = HAIR_COLORS[avatar.hairColor].color;
+  const isGirl = GENDERS[avatar.gender].key === 'girl';
+
+  // ลำตัว (เสื้อ) — child[0] เสมอ · ผู้หญิงเอวสอบเล็กน้อย
+  const body = box(isGirl ? 1.25 : 1.4, 1.6, 0.8, shirt); body.position.y = 2.0; player.add(body);
+  const head = box(1.1, 1.1, 1.1, skin);  head.position.y = 3.35; player.add(head);
+  // ผม (ทรง+สีตามที่เลือก)
+  player.hair = buildHair(HAIR_STYLES[avatar.hair].style, hairCol); player.add(player.hair);
+
+  // แขน (หมุนจากไหล่)
+  player.armL = box(0.45,1.3,0.45,skin); player.armL.geometry.translate(0,-0.65,0); player.armL.position.set(-0.95,2.55,0); player.add(player.armL);
+  player.armR = box(0.45,1.3,0.45,skin); player.armR.geometry.translate(0,-0.65,0); player.armR.position.set( 0.95,2.55,0); player.add(player.armR);
+
+  if(isGirl){
+    // กระโปรง: ทรงสอบกว้างด้านล่าง (สีกางเกง) วางใต้ลำตัว
+    const skirt = box(1.7, 0.7, 0.95, pants); skirt.position.y = 1.0; player.add(skirt);
+    // ขาเรียวกว่า (สีผิว = ถุงน่อง/ขา) หมุนจากสะโพก
+    player.legL = box(0.4,1.0,0.4,skin); player.legL.geometry.translate(0,-0.5,0); player.legL.position.set(-0.3,0.95,0); player.add(player.legL);
+    player.legR = box(0.4,1.0,0.4,skin); player.legR.geometry.translate(0,-0.5,0); player.legR.position.set( 0.3,0.95,0); player.add(player.legR);
+  } else {
+    // ขากางเกง 2 ข้าง (สีกางเกง) หมุนจากสะโพก
+    player.legL = box(0.55,1.4,0.55,pants); player.legL.geometry.translate(0,-0.7,0); player.legL.position.set(-0.38,1.2,0); player.add(player.legL);
+    player.legR = box(0.55,1.4,0.55,pants); player.legR.geometry.translate(0,-0.7,0); player.legR.position.set( 0.38,1.2,0); player.add(player.legR);
+  }
+
+  player.position.set(0,0,0);
+  scene.add(player);
+  updateWeaponMesh();    // ถ้ากำลังถืออาวุธอยู่ ให้แนบกลับเข้ามือหลังสร้างตัวละครใหม่
+}
+
+/* สร้างตัวละครใหม่ตาม avatar ปัจจุบัน (เรียกหลังเปลี่ยนการแต่งตัว) */
+function rebuildPlayer(){
+  if(!player) return;
+  const px = player.position.x, pz = player.position.z, ry = player.rotation.y;
+  scene.remove(player);
+  buildPlayer();
+  player.position.set(px, 0, pz); player.rotation.y = ry;
+}
+
+/* ============================================================
+   บอสประจำด่าน: ด่าน 1 ผีเสื้อ · ด่าน 2 ลิง · ด่าน 3 เทวดา
+   ============================================================ */
+let boss = null;
+const BOSS_MAX_HP = 3;
+const BOSS_BY_STAGE = {
+  pangsida: makeButterflyBoss,
+  khao:     makeMonkeyBoss,
+  prasat:   makeAngelBoss
+};
+const BOSS_NAMES = { pangsida:'Giant Butterfly Boss', khao:'Monkey Boss', prasat:'Angel Boss' };
+
+function makeMonkeyBoss(){
+  const g = new THREE.Group();
+  const fur = 0x6b4a2a, face = 0xE8C49B;
+  const body = box(2.6,2.8,2.0, fur); body.position.y=2.4; g.add(body);
+  const head = box(2.2,2.0,2.0, fur); head.position.y=4.4; g.add(head);
+  const muzzle = box(1.4,1.1,0.6, face); muzzle.position.set(0,4.1,1.05); g.add(muzzle);
+  // ตา
+  const eyeM = new THREE.MeshBasicMaterial({color:0xffffff});
+  [-0.5,0.5].forEach(ex=>{ const e=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.5,0.1),eyeM); e.position.set(ex,4.7,1.02); g.add(e);
+    const p=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.22,0.12),new THREE.MeshBasicMaterial({color:0x201008})); p.position.set(ex,4.7,1.06); g.add(p); });
+  // หู
+  [-1.3,1.3].forEach(ex=>{ const ear=box(0.7,0.7,0.4,face); ear.position.set(ex,4.6,0); g.add(ear); });
+  // แขน (แกว่ง)
+  g.armL = box(0.8,2.4,0.8,fur); g.armL.geometry.translate(0,-1.2,0); g.armL.position.set(-1.7,3.6,0); g.add(g.armL);
+  g.armR = box(0.8,2.4,0.8,fur); g.armR.geometry.translate(0,-1.2,0); g.armR.position.set( 1.7,3.6,0); g.add(g.armR);
+  return g;
+}
+function makeButterflyBoss(){
+  const g = new THREE.Group();
+  const bodyC = 0x3a2f4a;
+  const body = box(1.0,3.2,1.0, bodyC); body.position.y=3.0; g.add(body);
+  const head = box(1.3,1.3,1.3, bodyC); head.position.y=5.0; g.add(head);
+  const eyeM = new THREE.MeshBasicMaterial({color:0xffe07a});
+  [-0.3,0.3].forEach(ex=>{ const e=new THREE.Mesh(new THREE.BoxGeometry(0.35,0.35,0.1),eyeM); e.position.set(ex,5.1,0.7); g.add(e); });
+  // ปีก 4 แผ่น (กระพือ)
+  const wingMat=[0xFF7AB0,0xFF8A2B];
+  g.wingL = new THREE.Group(); g.wingR = new THREE.Group();
+  const wUp_L=box(2.6,2.2,0.2,wingMat[0]); wUp_L.position.set(-1.5,0.9,0); g.wingL.add(wUp_L);
+  const wLo_L=box(2.0,1.6,0.2,wingMat[1]); wLo_L.position.set(-1.2,-1.0,0); g.wingL.add(wLo_L);
+  const wUp_R=box(2.6,2.2,0.2,wingMat[0]); wUp_R.position.set(1.5,0.9,0); g.wingR.add(wUp_R);
+  const wLo_R=box(2.0,1.6,0.2,wingMat[1]); wLo_R.position.set(1.2,-1.0,0); g.wingR.add(wLo_R);
+  g.wingL.position.y=3.4; g.wingR.position.y=3.4; g.add(g.wingL); g.add(g.wingR);
+  return g;
+}
+/* บอส/มอนสเตอร์ด่าน 3 — ปรับโมเดลเป็น "เทพธิดา/นางอัปสรา" ตามธีมปราสาทสด๊กก๊อกธม จ.สระแก้ว
+   (แก้เฉพาะรูปทรง 3D เท่านั้น — ชื่อป้าย/คำศัพท์ในเกม "เทวดา" คงเดิมตามแบบทดสอบ+รายงานที่ล็อกแล้ว) */
+function makeAngelBoss(){
+  const g = new THREE.Group();
+  const robe = 0xF3E2C0, skin = 0xE8C49B, gold = 0xF2C84B, sampot = 0x9C3B4F, hairCol = 0x2b1d12;
+  // ผ้านุ่ง (สมปต) บานผายด้านล่าง
+  const skirt = box(2.3,1.3,1.5, sampot); skirt.position.y=1.65; g.add(skirt);
+  // สไบคาดอก (ลำตัว) ทรงสอบ
+  const body  = box(1.55,2.0,1.3, robe); body.position.y=2.95; g.add(body);
+  // ผ้าคาดเอวทอง
+  const belt  = box(1.9,0.28,1.4, gold); belt.position.y=2.0; g.add(belt);
+  // สร้อยคอ
+  const necklace = box(1.25,0.22,0.9, gold); necklace.position.y=3.78; g.add(necklace);
+  const head = box(1.5,1.5,1.5, skin); head.position.y=4.7; g.add(head);
+  // ผมยาวสยายด้านหลัง
+  const hair = box(1.3,1.9,0.5, hairCol); hair.position.set(0,4.0,-0.82); g.add(hair);
+  // ตุ้มหู
+  [-0.82,0.82].forEach(ex=>{ const ear=box(0.22,0.32,0.22,gold); ear.position.set(ex,4.5,0.35); g.add(ear); });
+  // ชฎา/มงกุฎยอดแหลมทรงเทพธิดา (แทนมงกุฎแบนเดิม)
+  const crownBase = box(1.7,0.4,1.7, gold); crownBase.position.y=5.6; g.add(crownBase);
+  const crownTip  = box(0.5,1.0,0.5, gold); crownTip.position.y=6.35; g.add(crownTip);
+  const eyeM = new THREE.MeshBasicMaterial({color:0x2b1d12});
+  [-0.35,0.35].forEach(ex=>{ const e=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.24,0.1),eyeM); e.position.set(ex,4.8,0.78); g.add(e); });
+  // วงแหวนรัศมี (หมุน)
+  g.halo = box(2.1,0.3,2.1, gold); g.halo.position.y=6.9; g.add(g.halo);
+  // ท่ารำนางอัปสรา — แขนข้างหนึ่งยกจีบสูง อีกข้างยื่นออกต่ำ (แทนท่าพนมเดิม)
+  g.armL = box(0.5,2.0,0.5,skin); g.armL.geometry.translate(0,-1.0,0); g.armL.position.set(-1.1,4.2,0.1); g.armL.rotation.z= 0.85; g.add(g.armL);
+  g.armR = box(0.5,2.0,0.5,skin); g.armR.geometry.translate(0,-1.0,0); g.armR.position.set( 1.1,3.5,0.1); g.armR.rotation.z=-0.35; g.add(g.armR);
+  return g;
+}
+const MONSTER_MODELS = { monkey:makeMonkeyBoss, butterfly:makeButterflyBoss, angel:makeAngelBoss };
+
+/* ---------- ระบบมอนสเตอร์ (เฟส C) ---------- */
+/* สร้างโมเดล voxel ของมอนสเตอร์ตามชนิด (reuse โมเดลบอสเดิม + เพิ่มค้างคาว/จระเข้) */
+function buildMonsterModel(key){
+  const M = MONSTERS[key];
+  if(MONSTER_MODELS[key]) { const g = MONSTER_MODELS[key](); g.scale.setScalar(0.6); return g; }
+  const g = new THREE.Group();
+  if(key === 'bat'){
+    const body=box(1.0,1.0,1.0,M.color); body.position.y=1.4; g.add(body);
+    const wl=box(1.8,0.2,1.0,0x2a1f28); wl.position.set(-1.2,1.6,0); g.add(wl); g.wl=wl;
+    const wr=box(1.8,0.2,1.0,0x2a1f28); wr.position.set( 1.2,1.6,0); g.add(wr); g.wr=wr;
+    [-0.3,0.3].forEach(ex=>{ const e=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.2,0.1),new THREE.MeshBasicMaterial({color:0xff2a2a})); e.position.set(ex,1.55,0.52); g.add(e); });
+  } else if(key === 'croc'){
+    const body=box(3.0,1.0,1.2,M.color); body.position.y=0.8; g.add(body);
+    const snout=box(1.6,0.7,0.9,M.color-0x0a0a0a); snout.position.set(1.9,0.7,0); g.add(snout);
+    const tail=box(1.6,0.6,0.7,M.color); tail.position.set(-2.0,0.7,0); g.add(tail);
+    [-0.25,0.25].forEach(ex=>{ const e=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.22,0.1),new THREE.MeshBasicMaterial({color:0xffd23a})); e.position.set(1.1,1.15,ex); g.add(e); });
+  } else {
+    const body=box(1.4,1.4,1.4,M.color); body.position.y=1.0; g.add(body);
+  }
+  return g;
+}
+
+/* spawn มอนสเตอร์ 1 ตัว ในโซนของมัน */
+function spawnMonster(key){
+  const M = MONSTERS[key];
+  const g = buildMonsterModel(key);
+  let x,z,tries=0;
+  do {
+    x = rand(-MAP * 0.62, MAP * 0.62);
+    z = rand(-MAP * 0.62, MAP * 0.62);
+    x = Math.max(-MAP+4, Math.min(MAP-4, x));
+    z = Math.max(-MAP+4, Math.min(MAP-4, z));
+    tries++;
+  } while(Math.hypot(x,z) < 12 && tries < 25);
+  g.position.set(x,0,z);
+  g.userData = { kind:'monster', key, hp:M.hp, maxhp:M.hp, atk:M.atk, hurtT:0, atkCd:0, model:M,
+                 homeX:x, homeZ:z, wanderA:rand(0,Math.PI*2), wanderT:0 };  // เดินวนรอบจุดเกิด (ไม่ไล่ผู้เล่น)
+  scene.add(g); enemies.push(g);
+}
+
+/* สุ่มจุดวางทั่วแมป (เลี่ยงทับจุดเกิดกลาง + ไม่ชนขอบ) */
+function scatterSpot(minFromCenter, avoidPts, minDist){
+  let x,z,tries=0;
+  do {
+    x = rand(-MAP+6, MAP-6);
+    z = rand(-MAP+6, MAP-6);
+    tries++;
+  } while(
+    (Math.hypot(x,z) < (minFromCenter||6)
+      || (avoidPts && avoidPts.some(p=>Math.hypot(x-p.x, z-p.z) < (minDist||14))))
+    && tries < 40
+  );
+  return {x,z};
+}
+
+/* กล่องสมบัติ voxel (เปิดแล้วมีคำถาม) */
+function buildTreasureChest(){
+  const g = new THREE.Group();
+  const wood = 0x8B5A2B, woodDark = 0x5C3D1E, gold = 0xFFD54A, goldDark = 0xB8860B;
+  const body = box(1.55, 0.9, 1.15, wood); body.position.y = 0.48; g.add(body);
+  const band = box(1.62, 0.2, 1.2, goldDark); band.position.y = 0.48; g.add(band);
+  const lid = box(1.58, 0.48, 1.18, woodDark); lid.position.set(0, 1.05, 0); lid.rotation.x = -0.1; g.add(lid);
+  g.lid = lid;
+  const lock = box(0.38, 0.42, 0.18, gold); lock.position.set(0, 0.86, 0.62); g.add(lock);
+  const gem = box(0.24, 0.24, 0.1, 0xFFF176); gem.position.set(0, 0.92, 0.7); g.add(gem);
+  [[-0.72,0.48,-0.52],[0.72,0.48,-0.52],[-0.72,0.48,0.52],[0.72,0.48,0.52]].forEach(([x,y,z])=>{
+    const nail = box(0.22, 0.88, 0.22, goldDark); nail.position.set(x,y,z); g.add(nail);
+  });
+  return g;
+}
+/* หัวใจฟื้นเลือด — voxel สีแดง 2 ก้อนบน + 1 ก้อนล่าง (รูปหัวใจง่ายๆ) */
+const HEART_HEAL = 30;          // เก็บหัวใจ 1 ดวง ฟื้นเลือด +30
+function buildHeart(){
+  const g = new THREE.Group();
+  const red = 0xFF4D6D, redLight = 0xFF8095;
+  const lTop = box(0.34, 0.34, 0.34, red); lTop.position.set(-0.18, 0.78, 0); g.add(lTop);
+  const rTop = box(0.34, 0.34, 0.34, red); rTop.position.set( 0.18, 0.78, 0); g.add(rTop);
+  const mid  = box(0.52, 0.34, 0.34, red); mid.position.set(0, 0.50, 0); g.add(mid);
+  const bot  = box(0.30, 0.30, 0.30, red); bot.position.set(0, 0.26, 0); g.add(bot);
+  const shine = box(0.12, 0.12, 0.12, redLight); shine.position.set(-0.16, 0.84, 0.16); g.add(shine);
+  g.userData.spinT = Math.random() * 6.28;
+  return g;
+}
+/* วางหัวใจฟื้นเลือดลอยกลางแมป (เดินไปเก็บ) */
+function spawnHeart(){
+  const s = scatterSpot(5);
+  const h = buildHeart();
+  h.position.set(s.x, 0, s.z);
+  h.userData.kind = 'heart';
+  scene.add(h); hearts.push(h);
+}
+
+/* กล่องสมบัติ (เปิดแล้วมีคำถาม) กระจายทั่วแมป — เว้นระยะห่างจากกล่องอื่นที่วางอยู่แล้ว กันกระจุกจุดเดียวกัน */
+function spawnQBox(){
+  const s = scatterSpot(8, qboxes.map(q=>q.position), 16);
+  const q = buildTreasureChest();
+  q.position.set(s.x, 0, s.z);
+  q.userData.kind = 'q';
+  scene.add(q); qboxes.push(q);
+}
+
+/* หมุดจุดหมาย: วงแหวนเรืองแสงตรงจุดที่คลิก/แตะ */
+let tapMarker = null;
+function showTapMarker(x, z){
+  if(!tapMarker){
+    tapMarker = new THREE.Mesh(
+      new THREE.TorusGeometry(0.9, 0.18, 8, 20),
+      new THREE.MeshBasicMaterial({ color:0xFF8A2B })
+    );
+    tapMarker.rotation.x = Math.PI/2;
+    scene.add(tapMarker);
+  }
+  tapMarker.position.set(x, 0.15, z);
+  tapMarker.visible = true;
+  tapMarker.userData.t = 0.9;
+}
+function updateTapMarker(dt){
+  if(tapMarker && tapMarker.visible){
+    tapMarker.rotation.z += dt*4;
+    tapMarker.userData.t -= dt;
+    if(tapMarker.userData.t <= 0 || !moveTarget) tapMarker.visible = false;
+  }
+}
+
+/* ลำแสงนำทาง: เสาแสงทองชี้กล่องสมบัติใบใกล้สุด (บอสโผล่แล้ว = ชี้บอสสีแดง)
+   เด็กไม่ต้องเดินหาเป้าหมายเอง — ลดเวลาเล่นต่อด่าน */
+let guideBeam = null;
+function updateGuideBeam(){
+  if(!guideBeam){
+    guideBeam = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.5, 0.5, 26, 10, 1, true),
+      new THREE.MeshBasicMaterial({ color:0xFFD54A, transparent:true, opacity:0.3, depthWrite:false })
+    );
+    guideBeam.position.y = 13;
+    scene.add(guideBeam);
+  }
+  let target = null;
+  if(boss){ target = boss; }
+  else {
+    let best = Infinity;
+    for(const q of qboxes){
+      const d = Math.hypot(player.position.x-q.position.x, player.position.z-q.position.z);
+      if(d < best){ best = d; target = q; }
+    }
+  }
+  if(!target){ guideBeam.visible = false; return; }
+  guideBeam.visible = true;
+  guideBeam.material.color.setHex(boss ? 0xFF5A4D : 0xFFD54A);
+  guideBeam.material.opacity = 0.22 + Math.abs(Math.sin(performance.now()*0.003))*0.14;
+  guideBeam.position.x = target.position.x;
+  guideBeam.position.z = target.position.z;
+}
+
+/* ---------- ระบบไอเท็มที่สวมใส่ (เฟส E) ---------- */
+/* ใส่อาวุธ/เกราะ → อัปเดต atk/def ของผู้เล่น + ป้าย HUD */
+function equipItem(itemKey){
+  const it = { key:itemKey, ...ITEMS[itemKey] };   // ผูก key ไว้ด้วย (ใช้สร้างโมเดลอาวุธในมือ)
+  if(it.kind === 'weapon'){ heldWeapon = it; }
+  else { heldArmor = it; }
+  recalcStats();
+  updateGearTags();
+  updateWeaponMesh();                   // แสดงอาวุธในมือตัวละคร 3D
+}
+/* คำนวณ atk/def รวม = ฐาน + อาวุธ/เกราะที่ได้จากตอบคำถาม */
+function recalcStats(){
+  pStats.atk = 10 + (heldWeapon ? heldWeapon.atk : 0);
+  pStats.def = (heldArmor ? heldArmor.def : 0);
+}
+function updateGearTags(){
+  document.getElementById('weaponIcon').textContent = heldWeapon ? heldWeapon.icon : '✊';
+  const ar = document.getElementById('armorIcon');
+  if(ar) ar.textContent = heldArmor ? heldArmor.icon : '👕';
+}
+/* ---------- ระบบต่อสู้ (เฟส D) ---------- */
+/* ปุ่มโจมตี: ฟันมอนสเตอร์ตัวที่อยู่ใกล้สุดในระยะ ถ้ามีอาวุธ */
+function playerAttack(){
+  if(!running || paused || attackCooldown > 0) return;
+  if(!heldWeapon){ toast('✊ No weapon yet! Answer a word to get one', 1500); return; }
+  attackCooldown = 0.5;
+  if(player.armR) player.armR.rotation.x = -1.4;
+  // บอสใกล้สุด
+  if(boss){
+    const bd = Math.hypot(player.position.x-boss.position.x, player.position.z-boss.position.z);
+    if(bd < 5.5){ hitBoss(); return; }
+  }
+  // หามอนสเตอร์ใกล้สุดในระยะโจมตี
+  let target=null, best=4.0;
+  for(const m of enemies){
+    const d = Math.hypot(player.position.x-m.position.x, player.position.z-m.position.z);
+    if(d < best){ best=d; target=m; }
+  }
+  if(!target){ SFX.wrong(); return; }
+  // คำนวณดาเมจ = atk ผู้เล่น (อย่างน้อย 1)
+  const dmg = Math.max(1, pStats.atk);
+  target.userData.hp -= dmg;
+  target.userData.hurtT = 0.25;
+  SFX.hit();
+  // เด้งมอนถอย
+  const dx=target.position.x-player.position.x, dz=target.position.z-player.position.z, dd=Math.hypot(dx,dz)||1;
+  target.position.x += (dx/dd)*1.2; target.position.z += (dz/dd)*1.2;
+  if(target.userData.hp <= 0) killMonster(target);
+  else toast('⚔️ Hit '+target.userData.model.name+' -'+dmg+' ('+Math.max(0,target.userData.hp)+' left)', 900);
+}
+
+/* มอนสเตอร์ตาย → คะแนน (อาวุธ/เกราะได้จากตอบคำถามเท่านั้น) */
+function killMonster(m){
+  const M = m.userData.model;
+  scene.remove(m); enemies = enemies.filter(x=>x!==m);
+  score += 30;
+  scorePopup('+30', m.position.x, 1.4, m.position.z);
+  toast('💥 Defeated '+M.name+'! +30 points', 1500);
+  updateHUD();
+}
+
+function clearBoss(){
+  if(boss){ scene.remove(boss); boss = null; }
+  document.getElementById('bossBar').classList.add('hidden');
+}
+
+function updateBossBar(){
+  if(!boss) return;
+  const pct = Math.max(0, boss.userData.hp / boss.userData.maxhp * 100);
+  const fill = document.getElementById('bossHpFill');
+  if(fill) fill.style.width = pct + '%';
+}
+
+function maybeSpawnBoss(){
+  if(boss || bossSpawned) return;
+  // บอสโผล่เมื่อ "เรียนครบทุกคำในด่านนี้" (ตอบถูกครบทั้ง 5 คำ) — เป้าหมายที่มีความหมาย
+  const zn = ZONES[getCurrentZoneKey()];
+  const stageEns = new Set(zn.words.map(w=>w.en));
+  const learnedStage = [...learnedWords].filter(e=>stageEns.has(e)).length;
+  if(learnedStage < stageEns.size) return;
+  spawnBoss();
+}
+
+function spawnBoss(){
+  bossSpawned = true;
+  const zk = getCurrentZoneKey();
+  boss = BOSS_BY_STAGE[zk]();
+  // โผล่ใกล้ผู้เล่น (~13 หน่วย) — ไม่ต้องเดินตามหาไกล ลดเวลาเล่น
+  const a = rand(0, Math.PI*2);
+  boss.position.set(
+    Math.max(-MAP+6, Math.min(MAP-6, player.position.x + Math.sin(a)*13)),
+    0,
+    Math.max(-MAP+6, Math.min(MAP-6, player.position.z + Math.cos(a)*13))
+  );
+  boss.userData = { awake:true, hp:BOSS_MAX_HP, maxhp:BOSS_MAX_HP, hurtT:0, atkCd:0 };
+  scene.add(boss);
+  document.getElementById('bossBar').classList.remove('hidden');
+  const bn = document.getElementById('bossName');
+  if(bn) bn.textContent = BOSS_NAMES[zk] || 'Boss';
+  updateBossBar();
+  SFX.boss();
+  // ข้อความแจ้ง: ด่านผีเสื้อสื่อชัดว่า "บินไล่ตาม" · ด่านอื่นใช้ข้อความเดิม
+  const bossMsg = zk === 'pangsida'
+    ? '🦋 All answered! '+BOSS_NAMES[zk]+' will fly after you — grab a weapon and fight!'
+    : '⚠️ '+BOSS_NAMES[zk]+' is awake! Grab a weapon and fight!';
+  toast(bossMsg, 2800);
+}
+
+function hitBoss(){
+  if(!boss || !heldWeapon || attackCooldown > 0) return;
+  attackCooldown = 0.55;
+  boss.userData.hp -= 1;
+  boss.userData.hurtT = 0.3;
+  SFX.hit();
+  updateBossBar();
+  const left = boss.userData.hp;
+  if(left <= 0) killBoss();
+  else toast('⚔️ Hit the boss! ('+left+'/'+boss.userData.maxhp+' left)', 900);
+}
+
+function killBoss(){
+  const zk = getCurrentZoneKey();
+  if(boss) scorePopup('+200', boss.position.x, 2.5, boss.position.z);
+  clearBoss();
+  bossSpawned = false;
+  score += 200;
+  SFX.start();
+  toast('🏆 You beat '+BOSS_NAMES[zk]+'! Stage clear: '+ZONES[zk].name, 2500);
+  updateHUD();
+  setTimeout(completeStage, 1200);
+}
+
+/* ผ่านด่าน (ปราบบอสแล้ว) → ป็อปอัพแสดงความยินดี (อังกฤษ) + ไปด่านต่อไปทันที ไม่กลับหน้าหลัก
+   ผ่านครบ 3 ด่าน → จอ Congratulations + เวลารวมที่ใช้ */
+function completeStage(){
+  const i = currentStageIdx;
+  const zn = ZONES[getCurrentZoneKey()];
+  const stageEns = new Set(zn.words.map(w=>w.en));
+  const learnedStage = [...learnedWords].filter(e=>stageEns.has(e)).length;
+  stageDone[i] = true;
+  if(score > stageScore[i]) stageScore[i] = score;   // เก็บคะแนนดีสุด
+  stageWords[i] = Math.max(stageWords[i], learnedStage);
+  running = false; paused = false;
+  const wonAll = stageDone.every(Boolean);
+  saveScoreRecord(wonAll);
+  hideGameHUD();
+  if(wonAll){ showWinScreen(); return; }
+  document.getElementById('scStageName').textContent = 'Stage '+(i+1)+' Clear — '+(zn.nameEn || zn.name)+'!';
+  document.getElementById('scInfo').textContent = 'You learned '+learnedStage+' new '+(learnedStage===1?'word':'words')+'. Keep going!';
+  const nextIdx = i + 1;
+  document.getElementById('scNextBtn').onclick = ()=>{
+    document.getElementById('stageClearModal').classList.add('hidden');
+    playStage(nextIdx);
+  };
+  SFX.stageClear();
+  document.getElementById('stageClearModal').classList.remove('hidden');
+}
+/* จอชนะ: ผ่านครบ 3 ด่าน — "คุณผ่านบทเรียนนี้แล้ว" + เวลารวม + คำที่เรียน + คะแนน */
+function showWinScreen(){
+  document.getElementById('winTime').textContent  = formatPlayTime(totalPlaySec);
+  document.getElementById('winWords').textContent = learnedWords.size + ' / 15';
+  document.getElementById('winScore').textContent = score;
+  SFX.win();
+  document.getElementById('winScreen').classList.remove('hidden');
+}
+
+/* มอนสเตอร์โจมตีผู้เล่น (เรียกตอนชนผู้เล่น) — เกราะ(def)ช่วยลดดาเมจ */
+function monsterHitPlayer(m){
+  const dmg = Math.max(1, m.userData.atk - pStats.def);
+  applyPlayerDamage(dmg, m.userData.model.name);
+  // ดันผู้เล่นถอยเล็กน้อย กันโดนซ้ำติดๆ
+  const dx=player.position.x-m.position.x, dz=player.position.z-m.position.z, d=Math.hypot(dx,dz)||1;
+  player.position.x = Math.max(-MAP+3, Math.min(MAP-3, player.position.x + (dx/d)*1.2));
+  player.position.z = Math.max(-MAP+3, Math.min(MAP-3, player.position.z + (dz/d)*1.2));
+}
+/* บอสโจมตีผู้เล่น (มือเปล่าเข้าใกล้) — แรงกว่ามอนปกติ */
+function bossHitPlayer(){
+  const dmg = Math.max(3, 14 - pStats.def);
+  applyPlayerDamage(dmg, BOSS_NAMES[getCurrentZoneKey()] || 'Boss');
+  const dx=player.position.x-boss.position.x, dz=player.position.z-boss.position.z, d=Math.hypot(dx,dz)||1;
+  player.position.x = Math.max(-MAP+3, Math.min(MAP-3, player.position.x + (dx/d)*2));
+  player.position.z = Math.max(-MAP+3, Math.min(MAP-3, player.position.z + (dz/d)*2));
+}
+/* ลดเลือดผู้เล่น + เอฟเฟกต์ + เช็คเลือดหมด → เริ่มด่านใหม่ */
+function applyPlayerDamage(dmg, attackerName){
+  pStats.hp -= dmg;
+  SFX.wrong();
+  flashHurt();
+  toast('💢 '+attackerName+' attacks! -'+dmg+' HP', 900);
+  updateHUD();
+  if(pStats.hp <= 0){ pStats.hp = 0; updateHUD(); loseStage(); }
+}
+/* แฟลชขอบจอแดงตอนโดนตี */
+let _hurtFlashEl = null;
+function flashHurt(){
+  if(!_hurtFlashEl){
+    _hurtFlashEl = document.createElement('div');
+    _hurtFlashEl.style.cssText = 'position:fixed;inset:0;z-index:25;pointer-events:none;'
+      + 'box-shadow:inset 0 0 80px 30px rgba(226,59,46,.55);opacity:0;transition:opacity .12s';
+    document.body.appendChild(_hurtFlashEl);
+  }
+  _hurtFlashEl.style.opacity = '1';
+  setTimeout(()=>{ if(_hurtFlashEl) _hurtFlashEl.style.opacity = '0'; }, 130);
+}
+
+/* ---------- เริ่มเกม / รีเซ็ต ---------- */
+/* ปุ่ม "เริ่มเกม" หน้าล็อกอิน → อ่านชื่อ + รีเซ็ตความคืบหน้า → ไปหน้าโฮมเลือกด่าน */
+function startGame(){
+  playerName = (document.getElementById('playerName').value || "Player").trim().slice(0,14) || "Player";
+  stuClass = (document.getElementById('stuClass').value || "").trim().slice(0,6);
+  stuNo = (document.getElementById('stuNo').value || "").trim().slice(0,3);
+  document.getElementById('nameTag').textContent = playerName;
+  resetProgress();
+  learnedWords = new Set();
+  totalPlaySec = 0;               // เริ่มผู้เล่นใหม่ = จับเวลารวมใหม่
+  updateTimerHUD();
+  pStats = { hp:100, maxhp:100, atk:10, def:0 };
+  recalcStats();
+  goToHome();
+  if(!howToSeen()) openHowTo();   // ครั้งแรกของเครื่อง: สอนวิธีเล่นก่อนเลือกด่าน
+}
+/* ไปหน้าโฮม (เลือกด่าน) — ซ่อนจอเล่น แสดง level-select */
+function goToHome(){
+  running = false; paused = false;
+  hideGameHUD();
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('gameOver').classList.add('hidden');
+  document.getElementById('summaryScreen').classList.add('hidden');
+  document.getElementById('stageClearModal').classList.add('hidden');
+  document.getElementById('winScreen').classList.add('hidden');
+  renderHome();
+  document.getElementById('homeScreen').classList.remove('hidden');
+}
+/* เข้าเล่นด่าน idx (ต้องปลดล็อกแล้ว) — คงอาวุธ-เกราะ/คำที่เรียนข้ามด่าน */
+function playStage(idx){
+  if(!stageUnlocked(idx)) return;
+  currentStageIdx = idx;
+  document.getElementById('homeScreen').classList.add('hidden');
+  document.getElementById('gameOver').classList.add('hidden');
+  setGameOverScreen('Caught!', '');
+  const retry = document.getElementById('retryBtn');
+  if(retry){ retry.textContent = '🔄 Retry stage'; retry.onclick = restartCurrentStage; }
+  pStats.hp = pStats.maxhp;
+  updateTimerHUD();
+  resetQuestionDeck();
+  applyLevelTheme();
+  respawnEntities();
+  player.position.set(0,0,0); player.rotation.y=0;
+  showGameHUD();
+  resetCamera();
+  SFX.start();
+  running = true; paused = false;
+  updateHUD();
+  toast(ZONES[getCurrentZoneKey()].emoji+' Stage: '+ZONES[getCurrentZoneKey()].name, 2000);
+  if(idx === 0 && !stageDone[0]) scheduleStarterTips();   // มือใหม่ด่านแรก: ทิปเดิน+กล่องสมบัติ
+}
+/* วาดรายการด่านในหน้าโฮม (ปลดล็อก/ล็อก/ผ่านแล้ว) */
+function renderHome(){
+  document.getElementById('homeHello').textContent = 'Clear a stage to unlock the next one';
+  // ตัวละครกลางหน้าโฮม
+  const nameEl = document.getElementById('homeAvatarName');
+  if(nameEl) nameEl.textContent = playerName || 'Player';
+  drawAvatarPreview('homeAvatar');
+
+  const list = document.getElementById('stageList');
+  list.innerHTML = '';
+  ZONE_KEYS.forEach((zk, i)=>{
+    const zn = ZONES[zk];
+    const unlocked = stageUnlocked(i);
+    const done = stageDone[i];
+    const row = document.createElement('button');
+    row.disabled = !unlocked;
+    // การ์ดด่าน: ปลดล็อก = panel นูน คลิกได้ / ผ่านแล้ว = ขอบเขียว / ล็อก = จาง
+    row.className = 'stage-card group w-full text-left rounded-2xl p-3 flex items-center gap-3 transition '
+      + (unlocked
+          ? (done ? 'panel-3d stage-done cursor-pointer' : 'panel-3d stage-open cursor-pointer hover:-translate-y-0.5')
+          : 'stage-locked cursor-not-allowed');
+    // ป้ายสถานะ (มุมขวา)
+    const statusPill = done
+      ? '<span class="stage-status stage-pill-done">✅ Cleared</span>'
+      : (unlocked ? '<span class="stage-status stage-pill-open">▶️ Play</span>'
+                  : '<span class="stage-status stage-pill-lock">🔒 Locked</span>');
+    const info = done ? ('Score '+stageScore[i]+' · Learned '+stageWords[i]+'/5 words')
+              : (unlocked ? 'Learn 5 words, then beat the boss' : 'Clear the previous stage first');
+    row.innerHTML =
+        '<span class="stage-num">'+(i+1)+'</span>'
+      + '<span class="stage-emoji text-3xl">'+(unlocked ? zn.emoji : '❔')+'</span>'
+      + '<span class="flex-1 min-w-0">'
+      +   '<span class="mitr block text-[#1A3A5C] font-bold leading-tight truncate">'+(unlocked ? zn.name : 'Locked stage')+'</span>'
+      +   '<span class="block text-[11px] text-[#1A3A5C]/65 truncate">'+info+'</span>'
+      + '</span>'
+      + statusPill;
+    if(unlocked) row.onclick = ()=> playStage(i);
+    list.appendChild(row);
+  });
+  const sumBtn = document.getElementById('homeSummaryBtn');
+  if(sumBtn) sumBtn.classList.toggle('hidden', !stageDone.every(Boolean));
+}
+/* ล้าง+วางมอนสเตอร์/กล่องคำถามใหม่ (ด่านปัจจุบัน) */
+function respawnEntities(){
+  [...enemies,...qboxes,...hearts].forEach(o=>scene.remove(o));
+  enemies=[]; qboxes=[]; hearts=[];
+  if(guideBeam){ scene.remove(guideBeam); guideBeam = null; }   // สร้างใหม่ให้เข้ากับฉากด่านใหม่
+  moveTarget = null;
+  attackTarget = null;
+  if(tapMarker) tapMarker.visible = false;
+  heldWeapon = null; heldArmor = null;
+  recalcStats();         // ล้างอาวุธแล้วต้องคิด atk/def ใหม่ ไม่งั้นพลังค้างจากด่านก่อน
+  updateGearTags();
+  updateWeaponMesh();    // ล้างอาวุธในมือจากด่านก่อน
+  document.getElementById('weaponTag').classList.remove('hidden');
+  clearBoss();
+  bossSpawned = false;
+  const spawns = STAGE_MONSTERS[getCurrentZoneKey()] || [];
+  spawns.forEach(s=>{ for(let i=0;i<s.n;i++) spawnMonster(s.key); });
+  for(let i=0;i<6;i++) spawnQBox();
+  for(let i=0;i<3;i++) spawnHeart();      // หัวใจฟื้นเลือด 3 ดวงต่อด่าน
+}
+function resetWorld(){
+  score=0; totalPlaySec=0;
+  currentStageIdx = 0;
+  learnedWords = new Set();
+  resetQuestionDeck();
+  updateTimerHUD();
+  pStats = { hp:100, maxhp:100, atk:10, def:0 };
+  recalcStats();
+  applyLevelTheme();
+  respawnEntities();
+  player.position.set(0,0,0); player.rotation.y=0;
+  document.getElementById('weaponTag').classList.remove('hidden');
+  updateHUD();
+}
+function updateHUD(){
+  document.getElementById('hudScore').textContent = score;
+  const stEl = document.getElementById('hudStage'); if(stEl) stEl.textContent = currentStageIdx + 1;
+  const zn = ZONES[getCurrentZoneKey()];
+  const znEl = document.getElementById('hudZoneName'); if(znEl) znEl.textContent = zn.name;
+  const stageEns = new Set(zn.words.map(w=>w.en));
+  const learnedStage = [...learnedWords].filter(e=>stageEns.has(e)).length;
+  // เลือดผู้เล่น
+  const hpFill = document.getElementById('hpFill');
+  if(hpFill) hpFill.style.width = Math.max(0, pStats.hp/pStats.maxhp*100)+'%';
+  const hpTxt = document.getElementById('hpText');
+  if(hpTxt) hpTxt.textContent = Math.max(0,Math.round(pStats.hp))+'/'+pStats.maxhp;
+  // คำที่เรียนแล้ว + atk/def + มอนสเตอร์เหลือ
+  const lnEl = document.getElementById('hudLearned'); if(lnEl) lnEl.textContent = learnedStage;
+  const atkEl = document.getElementById('hudAtk');  if(atkEl) atkEl.textContent = pStats.atk;
+  const defEl = document.getElementById('hudDef');  if(defEl) defEl.textContent = pStats.def;
+  const monEl = document.getElementById('hudMon');  if(monEl) monEl.textContent = enemies.length;
+  updateTimerHUD();
+  maybeSpawnBoss();
+}
+
+/* ---------- คำถาม ---------- */
+function openQuiz(qbox){
+  paused = true;
+  SFX.question();
+  toast('📦 Treasure box!', 900);
+  const item = makeQuestion();
+  window._lastQ = item;                 // เก็บไว้ให้เทสต์อ่านคำตอบถูก (ทั้ง 2 โหมด)
+  document.getElementById('qText').textContent = item.prompt;
+  // ป้ายบอกชนิดแบบฝึก + รูป (เฉพาะแบบ B "ดูรูป→เลือกคำ")
+  const badge = document.getElementById('qBadge');
+  if(item.mode === 'B'){
+    badge.textContent = '🖼️ Look at the picture. Choose the word.';
+  } else {
+    badge.textContent = '🔤 Read the word. Choose the picture.';
+  }
+  showQuizVisual(item);
+  const wrap = document.getElementById('qChoices');
+  const fb = document.getElementById('qFeedback');
+  fb.textContent=''; fb.className='text-center mitr mt-3 h-6 text-base';
+  wrap.innerHTML='';
+  document.getElementById('qWordCard').classList.add('hidden');   // ซ่อนการ์ดคำของข้อก่อน
+  let answered = false;
+  // แบบ B (ตัวเลือกเป็นคำอังกฤษ) จัดกึ่งกลาง อ่านง่ายกว่าชิดซ้าย
+  const alignCls = 'text-center';
+  // แบบ A ตัวเลือกเป็นรูป 2 คอลัมน์ · แบบ B ตัวเลือกเป็นคำ 1 คอลัมน์
+  wrap.className = item.mode === 'A' ? 'grid grid-cols-2 gap-2.5' : 'grid grid-cols-1 gap-2.5';
+  item.choices.forEach((c,i)=>{
+    const btn = document.createElement('button');
+    btn.className = 'ans-btn mitr '+alignCls+' px-4 py-3 rounded-xl bg-[#E3F0FB] text-[#1A3A5C] border-2 border-[#FF8A2B]/30 hover:border-[#FF8A2B]';
+    if(item.mode === 'A'){
+      const im = document.createElement('img');
+      im.src = WORD_PIC_PATH(c);
+      im.alt = 'Picture '+(i+1);
+      im.className = 'w-full aspect-[8/5] object-cover rounded-lg pointer-events-none';
+      btn.classList.remove('px-4', 'py-3');
+      btn.classList.add('p-1.5');
+      btn.appendChild(im);
+    } else {
+      btn.textContent = c;
+    }
+    btn.onclick = ()=>{
+      if(answered) return; answered = true;
+      const buttons = [...wrap.children];
+      buttons.forEach(b=>b.disabled=true);
+      buttons[item.answer].classList.add('ans-correct');
+      let gotCorrect = false;
+      if(i === item.answer){
+        gotCorrect = true;
+        SFX.correct();
+        score += 50;
+        if(item.en) learnedWords.add(item.en);   // นับคำที่เรียน(ตอบถูก)แล้ว
+        updateHUD();
+        fb.textContent = '✅ Correct! +50';
+        fb.classList.add('text-[#7CE0A0]');
+      } else {
+        SFX.wrong();
+        btn.classList.add('ans-wrong');
+        fb.textContent = '❌ Oops! The answer is "'+item.en+'".';
+        fb.classList.add('text-[#ff8a7a]');
+      }
+      // การ์ดสรุปคู่คำ อังกฤษ=ไทย ให้จำแน่นขึ้นทั้งตอบถูกและผิด
+      if(item.en){
+        const w = ALL_WORDS.find(x=>x.en===item.en);
+        document.getElementById('qwcEmoji').textContent = (w && w.emoji) || '';
+        document.getElementById('qwcEn').textContent = item.en;
+        document.getElementById('qwcTh').textContent = thForEn(item.en);
+        const card = document.getElementById('qWordCard');
+        card.classList.remove('hidden');
+        card.scrollIntoView({ block:'nearest' });   // จอเตี้ย: เลื่อนให้เห็นการ์ดเต็มใบ
+      }
+      setTimeout(()=>{
+        document.getElementById('quizModal').classList.add('hidden');
+        scene.remove(qbox); qboxes = qboxes.filter(x=>x!==qbox); spawnQBox();
+        paused = false;
+        // ตอบถูก → ได้อาวุธ/เกราะประจำด่าน "สวมให้ทันที" (ไม่ต้องเดินเก็บ — ลดเวลาเล่น)
+        if(gotCorrect){
+          const gear = STAGE_GEAR[getCurrentZoneKey()];
+          const itemKey = !heldWeapon ? gear.weapon : (!heldArmor ? gear.armor : null);
+          if(itemKey){
+            equipItem(itemKey);
+            SFX.equip();
+            toast('🎁 You got '+ITEMS[itemKey].icon+' '+ITEMS[itemKey].name+'!', 1800);
+          }
+          // ตอบถูกคำแรกของเกม: บอกเป้าหมายใหญ่ (รอ toast รางวัลจางก่อน)
+          if(learnedWords.size === 1)
+            setTimeout(()=> tipOnce('learn5', '📚 Great! You learned all 5 words — the boss is coming', 3200), 2200);
+        }
+      }, 2000);
+    };
+    wrap.appendChild(btn);
+  });
+  document.getElementById('quizModal').classList.remove('hidden');
+}
+
+/* คำถามฟื้นเลือด: เรียกตอนผู้เล่นเลือดหมด — ตอบถูก = ฟื้นเลือดเต็ม, เล่นต่อ */
+/* ชนะเกม: ผ่านครบทั้ง 3 ด่าน */
+/* หน้าสรุปคะแนนรวมทั้ง 3 ด่าน (เปิดจากปุ่มในหน้าโฮมเมื่อผ่านครบ) */
+function showSummary(){
+  document.getElementById('homeScreen').classList.add('hidden');
+  document.getElementById('winScreen').classList.add('hidden');
+  document.getElementById('summaryName').textContent =
+    playerName + (stuClass ? (' · '+stuClass) : '') + (stuNo ? (' No. '+stuNo) : '');
+  const rows = document.getElementById('summaryRows');
+  rows.innerHTML = '';
+  let total = 0, words = 0;
+  ZONE_KEYS.forEach((zk,i)=>{
+    const zn = ZONES[zk];
+    total += stageScore[i]; words += stageWords[i];
+    const row = document.createElement('div');
+    row.className = 'flex items-center gap-2 rounded-xl bg-[#EAF2FB] p-2';
+    row.innerHTML =
+      '<span class="text-2xl">'+zn.emoji+'</span>'
+      + '<span class="flex-1 min-w-0 mitr text-sm text-[#1A3A5C] font-bold truncate">Stage '+(i+1)+': '+zn.name+'</span>'
+      + '<span class="text-[11px] text-[#1A3A5C]/70 whitespace-nowrap">'+stageWords[i]+'/5 words</span>'
+      + '<span class="mitr text-[#E07A1A] font-bold whitespace-nowrap">'+stageScore[i]+'</span>';
+    rows.appendChild(row);
+  });
+  document.getElementById('summaryTotal').textContent = total;
+  document.getElementById('summaryWords').textContent = words+'/15';
+  const sumTime = document.getElementById('summaryTime');
+  if(sumTime) sumTime.textContent = formatPlayTime(totalPlaySec);
+  SFX.correct();
+  document.getElementById('summaryScreen').classList.remove('hidden');
+}
+
+/* เลือดหมด → แพ้ "ด่านนี้" ต้องเริ่มด่านนี้ใหม่ (ไม่ใช่จบทั้งเกม) */
+function loseStage(){
+  if(!running) return;
+  running = false; paused = false;
+  SFX.over();
+  const stageName = ZONES[getCurrentZoneKey()].name;
+  setGameOverScreen('💔 Out of HP!', 'Stage "'+stageName+'" — try again!');
+  document.getElementById('goScore').textContent = score;
+  const goStars = document.getElementById('goStars'); if(goStars) goStars.textContent = learnedWords.size;
+  hideGameHUD();
+  // ปุ่มหลัก = เริ่มด่านนี้ใหม่ (เก็บอาวุธ-เกราะไว้ แต่รีเซ็ตเลือด+ไอเท็มในด่าน)
+  const retry = document.getElementById('retryBtn');
+  if(retry){ retry.textContent = '🔄 Retry stage'; retry.onclick = restartCurrentStage; }
+  document.getElementById('gameOver').classList.remove('hidden');
+  saveScoreRecord(false);
+}
+/* เริ่มด่านปัจจุบันใหม่ — คงอาวุธ-เกราะ แต่ฟื้นเลือดเต็ม + วางมอน/ไอเท็มใหม่ */
+function restartCurrentStage(){
+  document.getElementById('gameOver').classList.add('hidden');
+  pStats.hp = pStats.maxhp;
+  recalcStats();
+  respawnEntities();
+  player.position.set(0,0,0); player.rotation.y = 0;
+  showGameHUD();
+  resetCamera();
+  running = true; paused = false;
+  updateHUD();
+  toast('🔄 Restarting stage "'+ZONES[getCurrentZoneKey()].name+'"!', 1500);
+}
+/* ซ่อน/แสดง HUD เกม (รวมไว้กันลืมจุดใดจุดหนึ่ง) */
+function hideGameHUD(){
+  document.getElementById('hud').classList.add('hidden');
+  document.getElementById('minimapWrap').classList.add('hidden');
+  document.getElementById('bossBar').classList.add('hidden');
+  document.getElementById('weaponTag').classList.add('hidden');
+  document.getElementById('attackBtn')?.classList.add('hidden');
+  document.getElementById('nameTag').style.display='none';
+  const ch = document.getElementById('camHint'); if(ch) ch.classList.add('hidden');
+}
+function showGameHUD(){
+  document.getElementById('hud').classList.remove('hidden');
+  document.getElementById('minimapWrap').classList.remove('hidden');
+  document.getElementById('weaponTag').classList.remove('hidden');
+  document.getElementById('nameTag').style.display='block';
+  if(isTouch) document.getElementById('attackBtn')?.classList.remove('hidden');
+  const ch = document.getElementById('camHint'); if(ch) ch.classList.remove('hidden');
+}
+
+function gameOver(){
+  // คงไว้เผื่อกรณีพิเศษ/ทดสอบ — ปกติใช้ loseStage แทน
+  if(!running) return;
+  running = false; paused = false;
+  SFX.over();
+  setGameOverScreen('Caught!', '');
+  document.getElementById('goScore').textContent = score;
+  const goStars = document.getElementById('goStars'); if(goStars) goStars.textContent = learnedWords.size;
+  document.getElementById('hud').classList.add('hidden');
+  document.getElementById('minimapWrap').classList.add('hidden');
+  document.getElementById('bossBar').classList.add('hidden');
+  document.getElementById('weaponTag').classList.add('hidden');
+  document.getElementById('attackBtn')?.classList.add('hidden');
+  document.getElementById('nameTag').style.display='none';
+  document.getElementById('gameOver').classList.remove('hidden');
+  const ch = document.getElementById('camHint'); if(ch) ch.classList.add('hidden');
+  saveScoreRecord(false);
+}
+
+/* ---------- ปุ่ม Home (ยอมแพ้) ---------- */
+function askGiveUp(){
+  if(!running) return;
+  paused = true;                                  // ★ ศัตรูหยุดเดินระหว่างถาม
+  const ok = confirm('Leave this stage and go back to the stage list?\n(Cleared stages are kept.)');
+  if(ok){
+    saveScoreRecord(false);
+    goToHome();                                   // กลับหน้าเลือกด่าน (ไม่รีเซ็ตความคืบหน้า)
+    toast('Back to the stage list 👋');
+  } else {
+    paused = false;                               // เล่นต่อ → ศัตรูเดินต่อ
+  }
+}
+
+/* ---------- ลูปเกม ---------- */
+function tick(){
+  requestAnimationFrame(tick);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  if(running && !paused){
+    if(attackCooldown > 0) attackCooldown -= dt;
+    tickPlayTimer(dt);
+  }
+  if(running && !paused){
+    movePlayer(dt);
+    moveEnemies(dt);
+    spinPickups(dt);
+    animateBoss(dt);
+    animateEnv(dt);
+    updateTapMarker(dt);
+    updateGuideBeam();
+    checkCollisions();
+  }
+  updateCamera(dt);
+  updateNameTag();
+  driftClouds(dt);              // เมฆลอยตลอด (ฉากหลังมีชีวิตแม้ตอนพัก)
+  if(running) drawMinimap();
+  renderer.render(scene, camera);
+}
+
+/* มินิแมพมุมจอ: วาดขอบแมป + ด่านปัจจุบัน + ผู้เล่น + pickup + มอนสเตอร์ */
+const ZONE_DOT = { khao:'#C9C2B4', pangsida:'#5FB83F', prasat:'#E0C896' };
+function drawMinimap(){
+  const cv = document.getElementById('minimap'); if(!cv) return;
+  const ctx = cv.getContext('2d'), S = cv.width, half = MAP;
+  const k = S / 72;   // สเกลจุดต่างๆ ให้ใหญ่ตามขนาดแผนที่ (อิงขนาดเดิม 72px)
+  const toPx = (v)=> (v/half*0.5 + 0.5) * S;
+  ctx.clearRect(0,0,S,S);
+  const zk = getCurrentZoneKey();
+  ctx.fillStyle = (ZONE_DOT[zk] || '#78C86E') + '88';
+  ctx.fillRect(0,0,S,S);
+  ctx.strokeStyle = 'rgba(255,138,43,0.45)'; ctx.lineWidth = 2;
+  ctx.strokeRect(4,4,S-8,S-8);
+  // กล่องสมบัติ
+  ctx.fillStyle = '#8B5A2B';
+  qboxes.forEach(q=>{ ctx.fillRect(toPx(q.position.x)-2*k, toPx(q.position.z)-2*k, 4*k, 4*k); });
+  ctx.fillStyle = '#FFD54A';
+  qboxes.forEach(q=>{ ctx.fillRect(toPx(q.position.x)-1*k, toPx(q.position.z)-1*k, 2*k, 2*k); });
+  // หัวใจฟื้นเลือด (จุดชมพู)
+  ctx.fillStyle = '#FF4D6D';
+  hearts.forEach(h=>{ ctx.beginPath(); ctx.arc(toPx(h.position.x), toPx(h.position.z), 2.4*k, 0, 6.28); ctx.fill(); });
+  // มอนสเตอร์ (จุดแดง)
+  ctx.fillStyle = '#E23B2E';
+  enemies.forEach(e=>{ ctx.beginPath(); ctx.arc(toPx(e.position.x), toPx(e.position.z), 1.8*k, 0, 6.28); ctx.fill(); });
+  if(boss){
+    ctx.fillStyle = '#9B1C1C';
+    ctx.beginPath(); ctx.arc(toPx(boss.position.x), toPx(boss.position.z), 3.5*k, 0, 6.28); ctx.fill();
+  }
+  // ผู้เล่น (สามเหลี่ยมชี้ทิศหัน) — sin→x, cos→z ตรงกับ rotation.y = atan2(dx,dz)
+  const px = toPx(player.position.x), pz = toPx(player.position.z), a = player.rotation.y;
+  ctx.fillStyle = '#1A3A5C';
+  ctx.beginPath();
+  ctx.moveTo(px + Math.sin(a)*5*k, pz + Math.cos(a)*5*k);
+  ctx.lineTo(px + Math.sin(a+2.4)*4*k, pz + Math.cos(a+2.4)*4*k);
+  ctx.lineTo(px + Math.sin(a-2.4)*4*k, pz + Math.cos(a-2.4)*4*k);
+  ctx.closePath(); ctx.fill();
+  // ตัวอักษรทิศ N/E/S/W ที่ขอบแผนที่ (บน=เหนือ ตามแผนที่ทั่วไป)
+  ctx.fillStyle = 'rgba(26,58,92,0.7)';
+  ctx.font = 'bold '+(9*k)+'px Sarabun, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('N', S/2, 9*k);
+  ctx.fillText('S', S/2, S-9*k);
+  ctx.fillText('E', S-9*k, S/2);
+  ctx.fillText('W', 9*k, S/2);
+  // อัปเดตป้ายบอกทิศที่กำลังหัน (เหนือ/ตะวันออก/ใต้/ตะวันตก)
+  updateCompass(a);
+}
+
+/* บอกทิศที่ผู้เล่นกำลังหัน จากมุม a = atan2(dx,dz)
+   หัน -z(ขึ้นแมพ)=เหนือ a≈±π · +x=ตะวันออก a≈+π/2 · +z=ใต้ a≈0 · -x=ตะวันตก a≈-π/2 */
+function updateCompass(a){
+  const el = document.getElementById('compassTag'); if(!el) return;
+  // หามุมเทียบทิศเหนือ: เหนือเมื่อ a=±π → หมุนให้ 0=เหนือ
+  let deg = (a * 180/Math.PI + 180) % 360; if(deg < 0) deg += 360;  // 0=เหนือ ตามเข็มผ่านตะวันตก
+  // deg: 0=เหนือ(หัน-z) เพิ่มไปทาง... ตรวจทิศด้วยช่วง 8 ทิศ
+  const dirs = [
+    ['North','⬆️'],['Northwest','↖️'],['West','⬅️'],['Southwest','↙️'],
+    ['South','⬇️'],['Southeast','↘️'],['East','➡️'],['Northeast','↗️']
+  ];
+  const idx = Math.round(deg/45) % 8;
+  el.textContent = '🧭 Facing '+dirs[idx][0]+' '+dirs[idx][1];
+}
+
+/* แอนิเมตบอส: หลับ=ลอยอยู่กับที่ · ตื่น=ไล่ผู้เล่นช้าๆ + ส่วนขยับ (ปีก/แขน/รัศมี) */
+function animateBoss(dt){
+  if(!boss) return;
+  const t = performance.now();
+  // ลดสถานะเจ็บ (กระพริบ) + cooldown โจมตีผู้เล่น
+  if(boss.userData.hurtT > 0){ boss.userData.hurtT -= dt; }
+  if(boss.userData.atkCd > 0){ boss.userData.atkCd -= dt; }
+  // ส่วนที่ขยับตามชนิดบอส
+  if(boss.armL){ const s=Math.sin(t*0.006)*0.5; boss.armL.rotation.x=s; boss.armR.rotation.x=-s; }
+  if(boss.wingL){ const f=Math.sin(t*0.012)*0.7; boss.wingL.rotation.y=f; boss.wingR.rotation.y=-f; }
+  if(boss.halo){ boss.halo.rotation.y += dt*2; }
+  if(boss.userData.awake){
+    // ไล่ผู้เล่นช้าๆ
+    const dx=player.position.x-boss.position.x, dz=player.position.z-boss.position.z;
+    const d=Math.hypot(dx,dz)||1;
+    const sp = 1.8;
+    boss.position.x += (dx/d)*sp*dt;
+    boss.position.z += (dz/d)*sp*dt;
+    boss.rotation.y = Math.atan2(dx,dz);
+    boss.position.y = Math.abs(Math.sin(t*0.004))*0.4;        // เด้งเบาๆ
+  } else {
+    boss.position.y = 1.0 + Math.sin(t*0.002)*0.5;            // หลับ=ลอยนิ่ง
+    boss.rotation.y = t*0.0004;
+  }
+}
+
+function movePlayer(dt){
+  // เป้าโจมตีที่ล็อกไว้ (คลิก/แตะมอนสเตอร์): ตามเป้า → ถึงระยะแล้วฟันเอง
+  if(attackTarget){
+    const alive = attackTarget === boss ? !!boss : enemies.includes(attackTarget);
+    if(!alive){ attackTarget = null; }
+    else {
+      const d = Math.hypot(attackTarget.position.x-player.position.x, attackTarget.position.z-player.position.z);
+      if(d <= 2.6){
+        moveTarget = null;
+        if(tapMarker) tapMarker.visible = false;
+        player.rotation.y = Math.atan2(attackTarget.position.x-player.position.x, attackTarget.position.z-player.position.z);
+        if(heldWeapon){ if(attackCooldown <= 0) playerAttack(); }
+        else { playerAttack(); attackTarget = null; }   // มือเปล่า: เตือนครั้งเดียวแล้วเลิกล็อก
+      } else {
+        moveTarget = { x: attackTarget.position.x, z: attackTarget.position.z };  // เป้าเดินหนี → ตามต่อ
+      }
+    }
+  }
+  let mx=0, mz=0;
+  if(keys.up) mz-=1; if(keys.down) mz+=1;
+  if(keys.left) mx-=1; if(keys.right) mx+=1;
+  let dx=0, dz=0;
+  if(mx!==0 || mz!==0){
+    moveTarget = null;
+    attackTarget = null;                      // คุมมือเอง = เลิกล็อกเป้า
+    const lenIn = Math.hypot(mx, mz) || 1;
+    mx /= lenIn; mz /= lenIn;
+    // เดินตามมุมกล้อง (W = ไปข้างหน้าที่มอง · D = ขวาบนจอ)
+    // กล้องมองทิศ (sin,cos); ขวาบนจอคือ perpendicular ที่ถูกต้อง = (-cos, sin)
+    const fx = Math.sin(camYaw), fz = Math.cos(camYaw);
+    const rx = -Math.cos(camYaw), rz = Math.sin(camYaw);
+    dx = fx * (-mz) + rx * mx;
+    dz = fz * (-mz) + rz * mx;
+  }
+  // เดินไปจุดที่คลิก/แตะบนพื้นโดยอัตโนมัติ
+  if(moveTarget){
+    const tx = moveTarget.x - player.position.x, tz = moveTarget.z - player.position.z;
+    const td = Math.hypot(tx,tz);
+    if(td < 0.6){ moveTarget = null; }      // ถึงแล้ว หยุด
+    else { dx += tx/td; dz += tz/td; }
+  }
+  const len = Math.hypot(dx,dz);
+  if(len > 0.01){
+    dx/=len; dz/=len;
+    player.position.x = Math.max(-MAP+3, Math.min(MAP-3, player.position.x + dx*PLAYER_SPEED*dt));
+    player.position.z = Math.max(-MAP+3, Math.min(MAP-3, player.position.z + dz*PLAYER_SPEED*dt));
+    player.rotation.y = Math.atan2(dx, dz);
+    // แกว่งแขนขา
+    walkPhase += dt*10;
+    const s = Math.sin(walkPhase)*0.6;
+    player.armL.rotation.x =  s; player.armR.rotation.x = -s;
+    player.legL.rotation.x = -s; player.legR.rotation.x =  s;
+  } else {
+    // คืนท่ายืน
+    ['armL','armR','legL','legR'].forEach(k=>player[k].rotation.x *= 0.8);
+  }
+}
+
+/* มอนสเตอร์เดินเร่ร่อนรอบจุดเกิดของตัวเอง (ไม่ไล่ผู้เล่น) — เปลี่ยนทิศสุ่มเป็นช่วงๆ
+   ถ้าเดินห่างจากจุดเกิด(home)เกินรัศมี ให้หันกลับเข้าหา home */
+const WANDER_RADIUS = 12;      // รัศมีที่มอนสเตอร์เดินวนรอบจุดเกิด
+const CHASE_RANGE = 9;         // ระยะที่มอนสเตอร์เริ่มไล่ผู้เล่น
+const CHASE_SPEED = 3.4;       // ความเร็วตอนไล่ (เร็วกว่าเดินเล่น)
+function moveEnemies(dt){
+  const px = player.position.x, pz = player.position.z;
+  enemies.forEach(e=>{
+    const u = e.userData;
+    if(u.atkCd > 0) u.atkCd -= dt;                 // ลด cooldown การโจมตี
+    // ระยะถึงผู้เล่น
+    const dpx = px - e.position.x, dpz = pz - e.position.z;
+    const distP = Math.hypot(dpx, dpz);
+    let ax, az, spd;
+    if(distP < CHASE_RANGE){
+      // อยู่ใกล้ → ไล่ผู้เล่น (สนุก/ตื่นเต้นขึ้น)
+      ax = dpx/(distP||1); az = dpz/(distP||1); spd = CHASE_SPEED;
+      u.chasing = true;
+    } else {
+      u.chasing = false;
+      // ทุก ~2-3.5 วิ สุ่มทิศเดินใหม่
+      u.wanderT -= dt;
+      if(u.wanderT <= 0){ u.wanderA = rand(0, Math.PI*2); u.wanderT = rand(2, 3.5); }
+      const hx = u.homeX - e.position.x, hz = u.homeZ - e.position.z;
+      const distHome = Math.hypot(hx, hz);
+      if(distHome > WANDER_RADIUS){ ax = hx/distHome; az = hz/distHome; }   // กลับ home
+      else { ax = Math.sin(u.wanderA); az = Math.cos(u.wanderA); }          // เดินเล่น
+      spd = ENEMY_SPEED;
+    }
+    e.position.x += ax * spd * dt;
+    e.position.z += az * spd * dt;
+    e.position.x = Math.max(-MAP+3, Math.min(MAP-3, e.position.x));
+    e.position.z = Math.max(-MAP+3, Math.min(MAP-3, e.position.z));
+    e.rotation.y = Math.atan2(ax, az);
+    e.position.y = Math.sin(performance.now()*0.005 + e.position.x)*0.1; // ลอยกระตุก
+  });
+}
+
+function spinPickups(dt){
+  const t = performance.now() * 0.001;
+  for(const o of qboxes){
+    o.rotation.y += dt * 1.1;
+    o.position.y = Math.sin(t * 2 + o.position.x * 0.05) * 0.08;
+    if(o.lid) o.lid.rotation.x = -0.1 + Math.sin(t * 2.8) * 0.07;
+  }
+  for(const o of hearts){
+    o.rotation.y += dt * 2.5;
+    o.position.y = 0.3 + Math.sin(t * 3 + (o.userData.spinT || 0)) * 0.18;  // ลอยขึ้นลง
+  }
+}
+
+function checkCollisions(){
+  const px = player.position.x, pz = player.position.z;
+  // ศัตรู — ชนแล้ว "โดนโจมตี" (ลดเลือด) ไม่ตายทันที · มี cooldown กันโดนรัวๆ
+  for(const e of enemies){
+    if(Math.hypot(px-e.position.x, pz-e.position.z) < 1.5){
+      if(e.userData.atkCd <= 0){
+        monsterHitPlayer(e);
+        e.userData.atkCd = 1.0;          // โจมตีได้ทุก 1 วิ
+        if(!running) return;             // เลือดหมด→เริ่มด่านใหม่แล้ว หยุดเลย
+      }
+    }
+  }
+  // บอส — มีอาวุธ = ฟันอัตโนมัติ · มือเปล่าชน = โดนบอสตีแรง (ลดเลือดเยอะ ไม่ตายทันที)
+  if(boss){
+    const bd = Math.hypot(px-boss.position.x, pz-boss.position.z);
+    if(bd < 3.2){
+      if(heldWeapon){ if(attackCooldown <= 0) hitBoss(); }
+      else if(boss.userData.atkCd <= 0){
+        bossHitPlayer();
+        boss.userData.atkCd = 1.2;
+        if(!running) return;
+      }
+    }
+  }
+  // หัวใจฟื้นเลือด — เดินไปเก็บ เพิ่มเลือด (ไม่เกิน maxhp)
+  for(const h of [...hearts]){
+    if(Math.hypot(px-h.position.x, pz-h.position.z) < 1.4){
+      scene.remove(h); hearts = hearts.filter(x=>x!==h);
+      if(pStats.hp < pStats.maxhp){
+        const healed = Math.min(HEART_HEAL, pStats.maxhp - pStats.hp);
+        pStats.hp = Math.min(pStats.maxhp, pStats.hp + HEART_HEAL);
+        SFX.pickup(); toast('❤️ HP +'+healed+'!', 1000); updateHUD();
+        scorePopup('+'+healed+' ❤️', h.position.x, 1, h.position.z, '#FF8FA3');
+      } else {
+        SFX.pickup(); toast('❤️ HP is full!', 900);
+      }
+      // เกิดหัวใจใหม่หลังเวลาสุ่ม (มีให้เก็บเรื่อยๆ แต่ไม่รก)
+      setTimeout(()=>{ if(running) spawnHeart(); }, rand(6000, 11000));
+    }
+  }
+  // กล่องคำถาม
+  for(const q of [...qboxes]){
+    if(Math.hypot(px-q.position.x, pz-q.position.z) < 1.5){ openQuiz(q); return; }
+  }
+}
+
+/* กล้องตามหลังแบบสมูท */
+function updateCamera(dt){
+  if(!player) return;
+  if(window.__lockCam) return;
+  if(gameInputActive()){
+    if(keys.camLeft)  camYaw -= CAM_ROT_SPEED * dt;
+    if(keys.camRight) camYaw += CAM_ROT_SPEED * dt;
+  }
+  const px = player.position.x, pz = player.position.z;
+  const lookY = player.position.y + 2;
+  const tx = px - Math.sin(camYaw) * camDist;
+  const tz = pz - Math.cos(camYaw) * camDist;
+  const ty = lookY + camHeight;
+  // ตามผู้เล่นแบบสมูท (ease) เข้าหาจุดกล้องปกติก่อน (ยังไม่คิดสิ่งบัง)
+  camera.position.x += (tx - camera.position.x) * Math.min(1, dt*4);
+  camera.position.z += (tz - camera.position.z) * Math.min(1, dt*4);
+  camera.position.y += (ty - camera.position.y) * Math.min(1, dt*4);
+  // กันกล้องมุด/ถูกบังด้วยต้นไม้-หิน-ภูเขา: ยิงรังสีจากหัวผู้เล่น→กล้อง(หลัง ease)
+  // โดนวัตถุทึบ → ดึงกล้องมาไว้หน้าวัตถุ "ทันที" (snap in) · พอสิ่งบังหลุด กล้อง ease ออกเองจาก follow
+  if(envGroup){
+    camLookV.set(px, lookY, pz);
+    camDirV.set(camera.position.x - px, camera.position.y - lookY, camera.position.z - pz);
+    const curDist = camDirV.length();
+    if(curDist > 0.01){
+      camDirV.multiplyScalar(1 / curDist);
+      camRay.set(camLookV, camDirV);
+      camRay.far = curDist;
+      camRay.camera = camera;   // จำเป็นเวลา raycast โดนป้าย (Sprite) ไม่งั้น error
+      const hits = camRay.intersectObjects(envGroup.children, true);   // เรียงใกล้→ไกล
+      for(const h of hits){
+        const m = h.object;
+        if(!m.material || m.material.transparent || m.material.opacity < 1 || m.type === 'Sprite') continue;
+        if(h.distance < CAM_OCCL_MIN_DIST) continue;   // ใกล้ผู้เล่นเกินไป = ยืน/เดินทะลุของอยู่ ไม่ใช่สิ่งบังจริง ข้ามไป
+        // ตั้งหน้าวัตถุ: เว้น ~0.6 เมื่อทำได้ แต่ไม่เกิน hit−0.1 (การันตีไม่เลยเข้าในวัตถุ แม้ hit ใกล้กว่า min)
+        const allow = Math.min(h.distance - 0.1, Math.max(1.0, h.distance - 0.6));
+        camera.position.set(px + camDirV.x * allow, lookY + camDirV.y * allow, pz + camDirV.z * allow);
+        break;
+      }
+    }
+  }
+  camera.lookAt(px, lookY, pz);
+}
+
+/* ป้ายชื่อ 2D ลอยตามหัวตัวละคร */
+function updateNameTag(){
+  const tag = document.getElementById('nameTag');
+  if(tag.style.display==='none' || !player) return;
+  const v = new THREE.Vector3(player.position.x, player.position.y+4.6, player.position.z);
+  v.project(camera);
+  if(v.z > 1){ tag.style.display='none'; return; }
+  tag.style.display='block';
+  tag.style.left = (v.x*0.5+0.5)*innerWidth + 'px';
+  tag.style.top  = (-v.y*0.5+0.5)*innerHeight + 'px';
+}
+
+/* ---------- อินพุต ---------- */
+function bindInput(){
+  const moveMap = { ArrowUp:'up', KeyW:'up', ArrowDown:'down', KeyS:'down',
+                    ArrowLeft:'left', KeyA:'left', ArrowRight:'right', KeyD:'right' };
+  const camMap  = { KeyQ:'camLeft', KeyE:'camRight' };
+  addEventListener('keydown', e=>{
+    if(moveMap[e.code] && gameInputActive()){ keys[moveMap[e.code]]=true; e.preventDefault(); }
+    if(camMap[e.code] && gameInputActive()){ keys[camMap[e.code]]=true; e.preventDefault(); }
+    if(e.code==='Space' && gameInputActive()){ e.preventDefault(); if(!e.repeat) playerAttack(); }
+    if(e.code==='KeyR' && gameInputActive()){ resetCamera(); toast('📷 View reset', 900); }
+  });
+  addEventListener('keyup', e=>{
+    if(moveMap[e.code]) keys[moveMap[e.code]]=false;
+    if(camMap[e.code])  keys[camMap[e.code]]=false;
+  });
+
+  // คลิก/แตะบนพื้น → เดิน · ลากเมาซ้าย/ขวา/กลาง → หมุนกล้อง
+  const scn = renderer.domElement;
+  let camDrag = false, camDragX = 0, camDragY = 0;
+  let ptrDown = false, ptrSX = 0, ptrSY = 0, ptrBtn = -1;
+
+  function beginCamDrag(clientX, clientY){
+    camDrag = true;
+    camDragX = clientX;
+    camDragY = clientY;
+    moveTarget = null;
+    if(tapMarker) tapMarker.visible = false;
+    scn._md = false;
+    scn.style.cursor = 'grabbing';
+  }
+  function applyCamDrag(clientX, clientY){
+    if(!camDrag || !gameInputActive()) return;
+    camYaw += (clientX - camDragX) * CAM_DRAG_SENS;
+    camHeight = Math.max(5, Math.min(17, camHeight - (clientY - camDragY) * CAM_HEIGHT_SENS));
+    camDragX = clientX;
+    camDragY = clientY;
+  }
+  function endCamDrag(){
+    camDrag = false;
+    if(running && gameInputActive()) scn.style.cursor = 'grab';
+    else scn.style.cursor = 'default';
+  }
+
+  scn.addEventListener('contextmenu', e=> e.preventDefault());
+  function goToScreenPoint(clientX, clientY){
+    if(!running || paused) return;
+    ndc.x = (clientX / innerWidth) * 2 - 1;
+    ndc.y = -(clientY / innerHeight) * 2 + 1;
+    raycaster.setFromCamera(ndc, camera);
+    // แตะ/คลิกโดนมอนสเตอร์หรือบอส → ล็อกเป้า เดินเข้าไปฟันเอง (ง่ายสำหรับเด็ก ไม่ต้องกะจังหวะ)
+    const foes = boss ? [...enemies, boss] : enemies;
+    const fh = raycaster.intersectObjects(foes, true);
+    if(fh.length){
+      const tgt = enemyFromHit(fh[0].object);
+      if(tgt){
+        attackTarget = tgt;
+        moveTarget = { x: tgt.position.x, z: tgt.position.z };
+        showTapMarker(tgt.position.x, tgt.position.z);
+        return;
+      }
+    }
+    attackTarget = null;                      // คลิกพื้นธรรมดา = เลิกล็อกเป้า
+    // หาจุดตัดกับระนาบพื้น (y=0)
+    const hit = new THREE.Vector3();
+    const ground = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
+    if(raycaster.ray.intersectPlane(ground, hit)){
+      moveTarget = {
+        x: Math.max(-MAP+3, Math.min(MAP-3, hit.x)),
+        z: Math.max(-MAP+3, Math.min(MAP-3, hit.z))
+      };
+      showTapMarker(moveTarget.x, moveTarget.z);
+    }
+  }
+  // เมาส์ (คุมง่ายสำหรับเด็ก): ปุ่มซ้าย คลิก/ลาก = เดินไปจุดนั้นเสมอ (ไม่หมุนกล้อง)
+  //   หมุนกล้อง = ปุ่มขวา/กลาง เท่านั้น หรือใช้ปุ่ม Q/E
+  scn.addEventListener('mousedown', e=>{
+    if(!gameInputActive()) return;
+    if(e.button === 1 || e.button === 2){
+      beginCamDrag(e.clientX, e.clientY);
+      e.preventDefault();
+      return;
+    }
+    if(e.button === 0){
+      ptrDown = true;
+      ptrSX = e.clientX;
+      ptrSY = e.clientY;
+      ptrBtn = 0;
+      scn._md = false;
+      goToScreenPoint(e.clientX, e.clientY);   // คลิกซ้าย = เดินทันที
+    }
+  });
+  scn.addEventListener('mousemove', e=>{
+    if(camDrag){
+      applyCamDrag(e.clientX, e.clientY);
+      return;
+    }
+    // ลากปุ่มซ้ายค้าง = เดินตามนิ้ว/เมาส์ต่อเนื่อง (ไม่เปลี่ยนเป็นหมุนกล้อง)
+    if(ptrDown && ptrBtn === 0 && gameInputActive()){
+      goToScreenPoint(e.clientX, e.clientY);
+    }
+  });
+  function onPointerUp(e){
+    if(e.button === 1 || e.button === 2) endCamDrag();
+    if(e.button === 0){
+      ptrDown = false;
+      ptrBtn = -1;
+      endCamDrag();
+    }
+  }
+  scn.addEventListener('mouseup', onPointerUp);
+  addEventListener('mouseup', onPointerUp);
+  scn.addEventListener('mouseleave', ()=>{
+    if(camDrag) endCamDrag();
+    ptrDown = false;
+    ptrBtn = -1;
+    scn._md = false;
+  });
+  scn.addEventListener('wheel', e=>{
+    if(!gameInputActive()) return;
+    e.preventDefault();
+    camDist = Math.max(CAM_DIST_MIN, Math.min(CAM_DIST_MAX, camDist + e.deltaY * 0.025));
+  }, {passive:false});
+  // ทัช (ไอแพด/มือถือ): 1 นิ้วแตะ/ลาก = เดินไปจุดที่แตะ · 2 นิ้วลาก = หมุนกล้อง/ปรับสูง · ถ่าง-หนีบ = ซูม
+  let touchCam = false, tcX = 0, tcY = 0, tcDist = 0;
+  function onTouchStart(e){
+    if(!gameInputActive()) return;
+    // ข้ามถ้านิ้วแตะโดนปุ่ม/HUD ที่กดได้ (ปุ่มฟัน หยุด ฯลฯ) — ปล่อยให้ปุ่มทำงานเอง
+    const tg = e.target;
+    if(tg && tg.closest && tg.closest('button, a, [data-ui]')) return;
+    e.preventDefault();
+    if(e.touches.length >= 2){
+      touchCam = true;                       // เข้าโหมดหมุนกล้อง — หยุดเดิน
+      moveTarget = null;
+      if(tapMarker) tapMarker.visible = false;
+      const a = e.touches[0], b = e.touches[1];
+      tcX = (a.clientX + b.clientX) / 2;
+      tcY = (a.clientY + b.clientY) / 2;
+      tcDist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    } else if(!touchCam){
+      const t = e.touches[0];
+      if(t) goToScreenPoint(t.clientX, t.clientY);
+    }
+  }
+  function onTouchMove(e){
+    if(!gameInputActive()) return;
+    const tg = e.target;
+    if(tg && tg.closest && tg.closest('button, a, [data-ui]')) return;
+    e.preventDefault();
+    if(touchCam && e.touches.length >= 2){
+      const a = e.touches[0], b = e.touches[1];
+      const nx = (a.clientX + b.clientX) / 2;
+      const ny = (a.clientY + b.clientY) / 2;
+      const nd = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      camYaw += (nx - tcX) * CAM_DRAG_SENS * 1.6;                                   // ลากซ้าย-ขวา = หมุนรอบตัว
+      camHeight = Math.max(5, Math.min(17, camHeight - (ny - tcY) * CAM_HEIGHT_SENS)); // ลากขึ้น-ลง = ปรับมุมสูง
+      camDist = Math.max(CAM_DIST_MIN, Math.min(CAM_DIST_MAX, camDist - (nd - tcDist) * 0.04)); // ถ่าง/หนีบ = ซูม
+      tcX = nx; tcY = ny; tcDist = nd;
+    } else if(!touchCam){
+      const t = e.touches[0];
+      if(t) goToScreenPoint(t.clientX, t.clientY);
+    }
+  }
+  function onTouchEnd(e){
+    if(e.touches.length === 0) touchCam = false;   // ยกครบทุกนิ้วก่อนค่อยกลับมาแตะเดิน (กันเดินพรวดตอนเหลือนิ้วเดียว)
+  }
+  scn.addEventListener('touchstart', onTouchStart, {passive:false});
+  scn.addEventListener('touchmove',  onTouchMove,  {passive:false});
+  scn.addEventListener('touchend',   onTouchEnd);
+  scn.addEventListener('touchcancel',onTouchEnd);
+  // ปล่อยนิ้ว = เดินต่อไปจนถึงจุดที่แตะไว้ (tap-to-move เหมือนเกมทั่วไป) แล้วหยุดเอง
+  // ไม่เคลียร์ moveTarget ที่นี่ — movePlayer จะหยุดเองเมื่อถึงเป้า
+  // ป้ายบอกวิธีคุมบนอุปกรณ์สัมผัส (เดสก์ท็อปใช้ข้อความเดิม WASD/เมาส์)
+  if(isTouch){
+    const ch = document.getElementById('camHint');
+    if(ch) ch.innerHTML = '☝️ Tap ground = walk · ✌️ 2-finger drag = turn view · pinch = zoom';
+  }
+
+  // ปุ่มฟันบนจอ — บนไอแพด/มือถือไม่มีคีย์ Space จึงต้องมีปุ่มแตะ
+  const attackBtn = document.getElementById('attackBtn');
+  if(attackBtn){
+    if(isTouch) attackBtn.classList.remove('hidden');   // เปิดเฉพาะอุปกรณ์สัมผัส
+    const doAttack = e=>{ e.preventDefault(); if(gameInputActive()) playerAttack(); };
+    attackBtn.addEventListener('touchstart', doAttack, {passive:false});
+    attackBtn.addEventListener('click', doAttack);
+  }
+
+  document.getElementById('startBtn').onclick = startGame;
+  document.getElementById('retryBtn').onclick = restartCurrentStage;  // default: เริ่มด่านนี้ใหม่
+  document.getElementById('homeBtn').onclick  = askGiveUp;             // ปุ่มโฮมในเกม = กลับหน้าเลือกด่าน
+  // ปุ่มเปิด/ปิดเสียงเอฟเฟกต์ + เพลงคลอ (จำค่าแยกกันไว้ในเครื่อง)
+  setMuted(muted);                                                     // ตั้งไอคอนให้ตรงค่าที่จำไว้
+  document.getElementById('muteBtn').onclick = ()=>{
+    setMuted(!muted);
+    toast(muted ? '🔇 Sound effects off' : '🔊 Sound effects on', 900);
+  };
+  setBgmMuted(bgmMuted);
+  document.getElementById('bgmBtn').onclick = ()=>{
+    setBgmMuted(!bgmMuted);
+    toast(bgmMuted ? '🔕 Music off' : '🎵 Music on', 900);
+  };
+  // ปุ่มซูมบนจอ (กดได้ทั้งเมาส์/จอสัมผัส) — ปรับ camDist ในช่วงเดียวกับล้อเมาส์/หนีบ 2 นิ้ว
+  const ZOOM_STEP = 3.2;
+  const zin = document.getElementById('zoomInBtn'), zout = document.getElementById('zoomOutBtn');
+  if(zin)  zin.onclick  = ()=>{ camDist = Math.max(CAM_DIST_MIN, camDist - ZOOM_STEP); };
+  if(zout) zout.onclick = ()=>{ camDist = Math.min(CAM_DIST_MAX, camDist + ZOOM_STEP); };
+  BGM.start();                                                         // ลูปเพลงคลอ (เงียบเองเมื่อไม่ได้อยู่ในด่าน)
+  // จอชนะ (ผ่านครบ 3 ด่าน)
+  document.getElementById('winSummaryBtn').onclick = ()=>{
+    document.getElementById('winScreen').classList.add('hidden');
+    showSummary();
+  };
+  document.getElementById('winHomeBtn').onclick = ()=>{
+    document.getElementById('winScreen').classList.add('hidden');
+    document.getElementById('startScreen').classList.remove('hidden');
+  };
+  document.getElementById('howToBtn').onclick   = openHowTo;
+  document.getElementById('howToClose').onclick = closeHowTo;
+  document.getElementById('rankBtn').onclick    = openLeaderboard;
+  document.getElementById('rankClose').onclick  = closeLeaderboard;
+  document.getElementById('wordsBtn').onclick   = openWordList;
+  document.getElementById('wordsClose').onclick = closeWordList;
+  document.getElementById('dressBtn').onclick   = openDressUp;
+  document.getElementById('dressClose').onclick = closeDressUp;
+  document.getElementById('playerName').addEventListener('keydown', e=>{ if(e.key==='Enter') startGame(); });
+  // หน้าโฮม (เลือกด่าน)
+  document.getElementById('homeSummaryBtn').onclick = showSummary;
+  document.getElementById('homeDressBtn').onclick   = openDressUp;
+  document.getElementById('homeRankBtn').onclick    = openLeaderboard;
+  document.getElementById('homeHowToBtn').onclick   = openHowTo;
+  document.getElementById('homeBackBtn').onclick    = ()=>{
+    document.getElementById('homeScreen').classList.add('hidden');
+    document.getElementById('startScreen').classList.remove('hidden');
+  };
+  // หน้าสรุปคะแนน
+  document.getElementById('summaryReplayBtn').onclick = ()=>{
+    document.getElementById('summaryScreen').classList.add('hidden');
+    startGame();   // เริ่มใหม่ทั้งหมด (รีเซ็ตความคืบหน้า)
+  };
+  document.getElementById('summaryHomeBtn').onclick = goToHome;
+
+  // เติมตัวเลือกเลขที่ 1–40 ใน dropdown (กรอกเร็ว ไม่พิมพ์ผิด)
+  const noSel = document.getElementById('stuNo');
+  for(let i=1;i<=40;i++){
+    const o=document.createElement('option'); o.value=String(i); o.textContent=String(i); noSel.appendChild(o);
+  }
+
+  function fitToViewport(){
+    camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  }
+  addEventListener('resize', fitToViewport);
+  // orientationchange: บางเบราว์เซอร์ (โดยเฉพาะ Android เก่า) ยังไม่รายงานขนาดจอใหม่ทันทีตอนอีเวนต์ยิง
+  // จึงเรียกซ้ำอีกครั้งหลังหน่วง ให้ทันตอน layout หมุนเสร็จจริง
+  addEventListener('orientationchange', ()=>{ fitToViewport(); setTimeout(fitToViewport, 300); });
+}
+
+/* ---------- boot ---------- */
+loadProfile();      // โหลดการแต่งตัว+กระเป๋าที่บันทึกไว้ ก่อนสร้างตัวละคร
+preloadWordPictures();
+initScene();
+bindInput();
+tick();
+</script>
+</body>
+</html>
